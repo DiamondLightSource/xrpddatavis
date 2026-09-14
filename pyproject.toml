@@ -33,6 +33,7 @@ requires-python = ">=3.11"
 
 [dependency-groups]
 dev = [
+    "httpx2>=2.13.0",
     "pre-commit",
     "pyright",
     "pytest",
@@ -55,6 +56,10 @@ name = "Richard Dixey"
 [tool.setuptools_scm]
 version_file = "src/xrddatavis/_version.py"
 
+[tool.setuptools.package-data]
+# the web frontend ships inside the wheel
+xrddatavis = ["static/*"]
+
 [tool.pyright]
 typeCheckingMode = "standard"
 reportMissingImports = false  # Ignore missing stubs in imported modules
@@ -65,7 +70,11 @@ addopts = """
     --tb=native -vv
     """
 # https://iscinumpy.gitlab.io/post/bound-version-constraints/#watch-for-warnings
-filterwarnings = "error"
+filterwarnings = [
+    "error",
+    # starlette's TestClient trips a deprecated anyio alias on import
+    "ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning",
+]
 # Doctest python code in docs, python code in src docstrings, test functions in tests
 testpaths = "docs src tests"
 
@@ -142,6 +151,10 @@ lint.select = [
     "UP",  # pyupgrade - https://docs.astral.sh/ruff/rules/#pyupgrade-up
     "SLF", # self - https://docs.astral.sh/ruff/settings/#lintflake8-self
 ]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's parameter markers are meant to be called in argument defaults
+extend-immutable-calls = ["fastapi.Body", "fastapi.Depends", "fastapi.Query"]
 
 [tool.ruff.lint.per-file-ignores]
 # By default, private member access is allowed in tests

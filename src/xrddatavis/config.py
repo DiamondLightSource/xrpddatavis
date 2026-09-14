@@ -13,15 +13,24 @@ class ServerConfig(BaseModel):
     suppress_polling_logs: bool = False
 
 
-class ResultsConfig(BaseModel):
-    # time to live seconds - how long the results
-    # from a process can live before being being valid for removal
-    ttl_seconds: int = 3600  # 3600s = 1hr
+class PlotsConfig(BaseModel):
+    # maximum number of plots held by the server - and therefore the maximum
+    # number that can be displayed - at any one time. Once full, the oldest
+    # plot is evicted to make room for a new one.
+    max_plots: int = Field(default=20, ge=1)
+
+    # time to live seconds - how long a plot can live
+    # before being valid for removal
+    ttl_seconds: int = Field(default=3600, ge=1)  # 3600s = 1hr
+
+    # maximum number of points accepted in a single trace, to stop one
+    # oversized POST exhausting the server's memory
+    max_points: int = Field(default=1_000_000, ge=1)
 
 
 class CleanupConfig(BaseModel):
     # how frequently the cleanup job actually runs
-    interval_seconds: int = 300
+    interval_seconds: int = Field(default=300, ge=1)
 
 
 class AlertConfig(BaseModel):
@@ -30,7 +39,7 @@ class AlertConfig(BaseModel):
 
 class Config(BaseSettings):
     server: ServerConfig = Field(default_factory=ServerConfig)
-    results: ResultsConfig = Field(default_factory=ResultsConfig)
+    plots: PlotsConfig = Field(default_factory=PlotsConfig)
     cleanup: CleanupConfig = Field(default_factory=CleanupConfig)
     alerts: AlertConfig = Field(default_factory=AlertConfig)
 

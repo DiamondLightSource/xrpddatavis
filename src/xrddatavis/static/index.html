@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>xrddatavis — live plots</title>
+    <link rel="stylesheet" href="static/styles.css" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M1 13 L5 13 L6 4 L8 12 L10 8 L15 8' fill='none' stroke='%232a78d6' stroke-width='1.6'/%3E%3C/svg%3E"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/3.1.1/plotly.min.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <h1>xrddatavis</h1>
+        <span class="subtitle">live XYE plot server</span>
+      </div>
+      <div class="status">
+        <span class="pill" id="capacity" title="Plots held / maximum allowed">— / —</span>
+        <span class="pill" id="ttl-pill" title="Plots are cleared this long after arriving">ttl —</span>
+        <span class="pill conn" id="conn" data-state="down" title="Live update stream">
+          <i class="dot"></i><span id="conn-label">connecting</span>
+        </span>
+        <button class="btn" id="theme-toggle" title="Switch light / dark">◐</button>
+      </div>
+    </header>
+
+    <main>
+      <aside class="sidebar">
+        <div class="sidebar-head">
+          <input
+            id="filter"
+            type="search"
+            placeholder="Filter by name, file or scan number…"
+            autocomplete="off"
+            aria-label="Filter plots"
+          />
+          <div class="row-actions">
+            <button class="btn" id="select-all">Select all</button>
+            <button class="btn" id="select-none">Deselect all</button>
+            <button class="btn danger" id="clear-all" title="Delete every plot on the server">
+              Clear server
+            </button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table id="plot-table">
+            <thead>
+              <tr>
+                <th class="plain" scope="col"><span class="sr-only">Show</span></th>
+                <th data-sort="name" data-label="Name" scope="col">Name</th>
+                <th data-sort="points" data-label="Pts" class="num" scope="col">Pts</th>
+                <th data-sort="created_at" data-label="TTL" class="num" scope="col">TTL</th>
+                <th class="plain" scope="col"><span class="sr-only">Delete</span></th>
+              </tr>
+            </thead>
+            <tbody id="plot-rows"></tbody>
+          </table>
+        </div>
+
+        <div class="sidebar-foot">
+          <span id="selected-count">0 shown</span>
+          <span id="updated-at"></span>
+        </div>
+      </aside>
+
+      <section class="content">
+        <div class="toolbar">
+          <div class="group">
+            <span class="group-label">Layout</span>
+            <div class="segmented" id="mode" role="group" aria-label="Plot layout">
+              <button data-mode="overlay" aria-pressed="true" title="All traces on one pair of axes">
+                Overlay
+              </button>
+              <button data-mode="offset" aria-pressed="false" title="Overlay with a vertical offset per trace (waterfall)">
+                Offset
+              </button>
+              <button data-mode="grid" aria-pressed="false" title="One panel per trace">
+                Grid
+              </button>
+            </div>
+          </div>
+
+          <div class="group">
+            <label class="check"
+              ><input type="checkbox" id="opt-errors" checked /> Error bars</label
+            >
+            <label class="check"><input type="checkbox" id="opt-fits" checked /> Fits</label>
+            <label class="check"><input type="checkbox" id="opt-logy" /> Log y</label>
+            <label class="check"
+              ><input type="checkbox" id="opt-normalise" /> Normalise</label
+            >
+          </div>
+
+          <div class="group">
+            <button class="btn" id="reset-zoom" title="Reset the axes">Reset view</button>
+          </div>
+        </div>
+
+        <div class="chart-area">
+          <div id="chart"></div>
+          <div class="overlay-msg" id="overlay-msg" hidden></div>
+        </div>
+      </section>
+    </main>
+
+    <script src="static/app.js"></script>
+  </body>
+</html>

@@ -70,9 +70,16 @@ config:
     suppress_polling_logs: false
   queue:
     workers: 4
-  results:
+  plots:
+    # maximum number of plots held - and therefore displayable - at once.
+    # Posting past this evicts the oldest plot.
+    max_plots: 20
+    # a plot is cleared automatically this long after it arrives
     ttl_seconds: 3600
+    # largest single trace accepted by POST /plot
+    max_points: 1000000
   cleanup:
+    # how often expired plots are swept up
     interval_seconds: 300
   plugins:
     paths:

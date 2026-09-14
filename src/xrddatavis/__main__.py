@@ -67,7 +67,7 @@ def serve(ctx: click.Context):
     config = ctx.obj["config"]
 
     uvicorn.run(
-        start_api(),
+        start_api(config),
         factory=False,
         host=config.server.host,
         port=int(config.server.port),
