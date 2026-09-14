@@ -1,0 +1,20 @@
+# Changes here will be overwritten by Copier
+_commit: 5.4.0
+_src_path: https://github.com/DiamondLightSource/python-copier-template.git
+author_email: richard.dixey@diamond.ac.uk
+author_name: Richard Dixey
+component_lifecycle: experimental
+component_owner: group:default/data-analysis
+component_type: application
+description: A deployable API that can be sent XYEData json messages via POST and
+    then plotted via a web front end
+distribution_name: xrddatavis
+docker: true
+docs_type: README
+git_platform: github.com
+github_org: DiamondLightSource
+package_name: xrddatavis
+pypi: true
+repo_name: xrddatavis
+strict_typing: false
+type_checker: pyright

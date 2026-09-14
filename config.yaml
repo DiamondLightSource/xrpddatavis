@@ -1,0 +1,16 @@
+server:
+  host: "localhost"
+  port: 8000
+  suppress_polling_logs: true
+
+queue:
+  workers: 2
+
+results:
+  ttl_seconds: 3600 #time to live of results before deletion
+
+cleanup:
+  interval_seconds: 300 #frequency of checking for deletable results
+
+alerts:
+  slack_webhook_url: "" # Webhook URL for sending alerts to Slack, leave empty to disable

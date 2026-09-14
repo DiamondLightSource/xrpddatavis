@@ -1,0 +1,109 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/diamondlightsource/xrddatavis
+  pullPolicy: Always
+  tag: ""
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext: {}
+
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+
+service:
+  type: ClusterIP
+  port: 8000
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts: []
+  tls: []
+
+resources:
+  limits:
+    cpu: 2
+    memory: 12Gi
+    ephemeral-storage: 4Gi
+  requests:
+    cpu: 1
+    memory: 4Gi
+    ephemeral-storage: 4Gi
+
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  periodSeconds: 15
+  failureThreshold: 3
+  timeoutSeconds: 5
+readinessProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  periodSeconds: 30
+  failureThreshold: 3
+  timeoutSeconds: 5
+startupProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  failureThreshold: 9
+  timeoutSeconds: 5
+
+
+config:
+  server:
+    host: "0.0.0.0"
+    port: 8000
+    suppress_polling_logs: false
+  queue:
+    workers: 4
+  results:
+    ttl_seconds: 3600
+  cleanup:
+    interval_seconds: 300
+  plugins:
+    paths:
+      - ./plugins
+    github_repos: []
+    register_all: True # whether to register all analyses found in plugins or only those decorated
+  rabbitmq:
+    enabled: true
+    host: "ixx-rabbitmq-daq.diamond.ac.uk"
+    username: guest
+    password: guest
+    port: 61613
+    destinations:
+      - "/topic/public.worker.event" #bluesky scans
+      - "/topic/gda.messages.scan" # gda scans
+      - "/topic/gda.messages.processing" # dawn stuff
+      - "/topic/public.analysis.trigger" # custom topic for triggering analyses from other services
+  alerts:
+    slack_webhook_url: "" # Webhook URL for sending alerts to Slack, leave empty to disable
+  uvicorn:
+    workers: 1
+  logging:
+    graylog:
+      enabled: false
+      url: ""
+      level: "INFO"
+    stream:
+      enabled: true
+      level: "DEBUG"
+
+volumeMounts: []
+volumes: []
+nodeSelector: {}
+tolerations: []

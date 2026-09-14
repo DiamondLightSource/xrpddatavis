@@ -1,0 +1,5 @@
+HEALTH_ROUTE = "/healthz"
+PLOT = "/plot"
+LIVEPLOTS = "/liveplots"
+REMOVE_PLOT = "/remove/{id}"
+EDIT_PLOT = "/edit/{id}"
