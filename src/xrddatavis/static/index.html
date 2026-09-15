@@ -30,16 +30,40 @@
     <main>
       <aside class="sidebar">
         <div class="sidebar-head">
-          <input
-            id="filter"
-            type="search"
-            placeholder="Filter by name, file or scan number…"
-            autocomplete="off"
-            aria-label="Filter plots"
-          />
+          <div class="search-row">
+            <input
+              id="filter"
+              type="search"
+              placeholder="Filter by name, file or scan number…"
+              autocomplete="off"
+              aria-label="Filter plots"
+            />
+            <button class="btn" id="reset-filters" hidden title="Clear all filters">
+              Reset
+            </button>
+          </div>
+
+          <div class="facet-row" id="type-tabs-row" hidden>
+            <span class="facet-label">Type</span>
+            <div class="chip-group" id="type-tabs" role="tablist" aria-label="Filter by data type"></div>
+          </div>
+
+          <div class="facet-row" id="filenumber-row" hidden>
+            <span class="facet-label">File #</span>
+            <div
+              class="chip-group"
+              id="filenumber-chips"
+              role="group"
+              aria-label="Filter by file number"
+            ></div>
+          </div>
+
           <div class="row-actions">
             <button class="btn" id="select-all">Select all</button>
             <button class="btn" id="select-none">Deselect all</button>
+            <button class="btn" id="upload-btn" title="Plot a 2 or 3 column data file">
+              Upload file…
+            </button>
             <button class="btn danger" id="clear-all" title="Delete every plot on the server">
               Clear server
             </button>
@@ -65,6 +89,17 @@
           <span id="selected-count">0 shown</span>
           <span id="updated-at"></span>
         </div>
+
+        <div
+          class="sidebar-resizer"
+          id="sidebar-resizer"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize the plot list"
+          aria-valuemin="300"
+          aria-valuemax="720"
+          tabindex="0"
+        ></div>
       </aside>
 
       <section class="content">
@@ -106,6 +141,79 @@
         </div>
       </section>
     </main>
+
+    <dialog id="upload-dialog" class="upload-dialog">
+      <form id="upload-form">
+        <h2>Upload a column file</h2>
+        <p class="hint">
+          Two or three columns - x, y, and optionally an error column e - separated
+          by commas, tabs, semicolons or spaces. Lines starting with # are ignored.
+        </p>
+
+        <label class="field">
+          <span>File</span>
+          <input
+            type="file"
+            id="upload-file"
+            accept=".csv,.tsv,.txt,.dat,.xy,.xye,.gr,.sq,.fq,.iq"
+            required
+          />
+        </label>
+
+        <div class="field-row">
+          <label class="field">
+            <span>Delimiter</span>
+            <select id="upload-delimiter">
+              <option value="auto" selected>Auto-detect</option>
+              <option value=",">Comma ( , )</option>
+              <option value="tab">Tab</option>
+              <option value=";">Semicolon ( ; )</option>
+              <option value="ws">Whitespace</option>
+            </select>
+          </label>
+          <label class="check" style="align-self: center">
+            <input type="checkbox" id="upload-header" /> First row is a header
+          </label>
+        </div>
+
+        <div class="field-row">
+          <label class="field">
+            <span>Name</span>
+            <input type="text" id="upload-name" placeholder="from filename" />
+          </label>
+          <label class="field">
+            <span>Data type</span>
+            <input
+              type="text"
+              id="upload-datatype"
+              list="upload-datatype-options"
+              placeholder="optional"
+            />
+            <datalist id="upload-datatype-options">
+              <option value="pxrd"></option>
+              <option value="iq"></option>
+              <option value="sq"></option>
+              <option value="fq"></option>
+              <option value="gr"></option>
+            </datalist>
+          </label>
+          <label class="field">
+            <span>File #</span>
+            <input type="number" id="upload-filenumber" placeholder="optional" />
+          </label>
+        </div>
+
+        <div class="upload-preview" id="upload-preview" hidden></div>
+        <div class="upload-error" id="upload-error" hidden></div>
+
+        <div class="dialog-actions">
+          <button type="button" class="btn" id="upload-cancel">Cancel</button>
+          <button type="submit" class="btn primary" id="upload-submit" disabled>
+            Plot it
+          </button>
+        </div>
+      </form>
+    </dialog>
 
     <script src="static/app.js"></script>
   </body>

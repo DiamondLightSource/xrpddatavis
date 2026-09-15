@@ -90,6 +90,7 @@ async def plot(
                         "e": [11.0, 18.4, 10.9],
                         "filepath": "/dls/i11/data/sample-001.xye",
                         "filenumber": 1,
+                        "data_type": "pxrd",
                     },
                     "fit": {
                         "name": "sample-001 fit",

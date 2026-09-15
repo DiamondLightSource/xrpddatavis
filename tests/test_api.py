@@ -68,6 +68,68 @@ def test_post_wrapped_request_with_fit(client):
     assert full["fit"]["name"] == "sample-002 fit"
 
 
+def test_data_type_flows_through_summary_and_full_data(client):
+    response = client.post(
+        PLOT,
+        json={"data": xye("gr-001", filenumber=3, data_type="gr")},
+    )
+    assert response.status_code == 201
+    plot_id = response.json()["id"]
+
+    summary = client.get(LIVEPLOTS).json()["plots"][0]
+    assert summary["data_type"] == "gr"
+
+    full = client.get(f"/plot/{plot_id}").json()
+    assert full["data"]["data_type"] == "gr"
+
+
+def test_data_type_is_optional_and_defaults_to_null(client):
+    client.post(PLOT, json=xye("untyped"))
+    summary = client.get(LIVEPLOTS).json()["plots"][0]
+    assert summary["data_type"] is None
+
+
+def test_data_type_can_be_edited(client):
+    plot_id = client.post(PLOT, json=xye("retype-me")).json()["id"]
+    edited = client.patch(f"/edit/{plot_id}", json={"data_type": "sq"})
+    assert edited.status_code == 200
+    assert edited.json()["data_type"] == "sq"
+
+
+def test_pin_via_edit_protects_from_expiry(client):
+    plot_id = client.post(PLOT, json=xye("pin-me")).json()["id"]
+    summary = client.get(LIVEPLOTS).json()["plots"][0]
+    assert summary["pinned"] is False
+
+    edited = client.patch(f"/edit/{plot_id}", json={"pinned": True})
+    assert edited.status_code == 200
+    assert edited.json()["pinned"] is True
+
+    store = client.app.state.store
+    stored = store.get(plot_id)
+    stored.created_at = datetime.now(UTC) - timedelta(seconds=120)
+
+    # config fixture sets ttl_seconds=60 - this would normally be long expired
+    listed = client.get(LIVEPLOTS).json()["plots"]
+    assert len(listed) == 1
+    assert listed[0]["pinned"] is True
+
+    client.patch(f"/edit/{plot_id}", json={"pinned": False})
+    assert client.get(LIVEPLOTS).json()["plots"] == []
+
+
+def test_pinned_plot_is_evicted_only_once_everything_else_is_pinned(client):
+    # config fixture sets max_plots=3
+    ids = [client.post(PLOT, json=xye(f"p{i}")).json()["id"] for i in range(3)]
+    client.patch(f"/edit/{ids[0]}", json={"pinned": True})
+
+    # p1 is next-oldest and unpinned, so it is evicted instead of pinned p0
+    response = client.post(PLOT, json=xye("p3"))
+    assert response.json()["evicted"] == [ids[1]]
+    names = {plot["name"] for plot in client.get(LIVEPLOTS).json()["plots"]}
+    assert names == {"p0", "p2", "p3"}
+
+
 def test_mismatched_array_lengths_are_rejected(client):
     response = client.post(PLOT, json={"name": "bad", "x": [1, 2, 3], "y": [1, 2]})
     assert response.status_code == 422

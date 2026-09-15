@@ -113,6 +113,10 @@ class ResultStore:
                 plot.plot_type = changes.plot_type
             if changes.colour_index is not None:
                 plot.colour_index = changes.colour_index % PALETTE_SLOTS
+            if changes.data_type is not None:
+                plot.data.data_type = changes.data_type
+            if changes.pinned is not None:
+                plot.pinned = changes.pinned
             plot.updated_at = datetime.now(UTC)
             self._revision += 1
             return plot
@@ -138,7 +142,7 @@ class ResultStore:
             expired = [
                 key
                 for key, response in self._items.items()
-                if response.is_expired(self.ttl_seconds, now)
+                if not response.pinned and response.is_expired(self.ttl_seconds, now)
             ]
             for key in expired:
                 del self._items[key]
@@ -149,10 +153,17 @@ class ResultStore:
         return len(expired)
 
     def _evict_oldest(self) -> list[PlotData]:
-        """Drop oldest plots until within ``max_plots``. Call under the lock."""
+        """Drop oldest plots until within ``max_plots``. Call under the lock.
+
+        A pinned plot is shielded from eviction as long as an unpinned one is
+        available to drop instead. ``max_plots`` is still a hard cap though -
+        if every remaining plot is pinned, the oldest of those goes too.
+        """
         evicted: list[PlotData] = []
         while len(self._items) > self.max_plots:
-            oldest = min(self._items.values(), key=lambda r: r.created_at)
+            unpinned = [item for item in self._items.values() if not item.pinned]
+            pool = unpinned or list(self._items.values())
+            oldest = min(pool, key=lambda r: r.created_at)
             evicted.append(self._items.pop(str(oldest.id)))
         return evicted
 

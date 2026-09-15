@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, model_validator
 
 PLOT_TYPES = Literal["scatter", "line", "line+markers"]
+DATA_TYPES = Literal["pxrd", "gr", "fq", "sq", "iq"]
 
 
 def _utcnow() -> datetime:
@@ -23,6 +24,7 @@ class XYEData(BaseModel):
     # axis labels for the frontend, e.g. "2θ / °" and "Intensity / counts"
     x_label: str | None = None
     y_label: str | None = None
+    data_type: DATA_TYPES | str | None = None
 
     @model_validator(mode="after")
     def _check_lengths(self) -> Self:
@@ -70,6 +72,9 @@ class PlotUpdate(BaseModel):
     name: str | None = None
     plot_type: PLOT_TYPES | None = None
     colour_index: int | None = Field(default=None, ge=0)
+    data_type: DATA_TYPES | str | None = None
+    # when true, this plot is exempt from ttl_seconds expiry (see ResultStore)
+    pinned: bool | None = None
 
 
 class PlotData(BaseModel):
@@ -86,6 +91,9 @@ class PlotData(BaseModel):
     # store and held for the life of the plot, so a colour follows the plot
     # rather than its position in the list.
     colour_index: int = 0
+    # a pinned plot is skipped by ttl expiry (and, while any unpinned plot
+    # remains, by max_plots eviction) until it is unpinned or removed by hand
+    pinned: bool = False
 
     def age_seconds(self, now: datetime | None = None) -> float:
         """Seconds elapsed since this result was created."""
@@ -105,6 +113,7 @@ class PlotData(BaseModel):
             id=self.id,
             name=self.data.name,
             plot_type=self.plot_type,
+            data_type=self.data.data_type,
             points=len(self.data.x),
             x_min=min(self.data.x),
             x_max=max(self.data.x),
@@ -118,6 +127,7 @@ class PlotData(BaseModel):
             updated_at=self.updated_at,
             version=self.version,
             colour_index=self.colour_index,
+            pinned=self.pinned,
             age_seconds=age,
             expires_at=self.expires_at(ttl_seconds),
             ttl_remaining_seconds=max(0.0, ttl_seconds - age),
@@ -130,6 +140,7 @@ class PlotSummary(BaseModel):
     id: UUID
     name: str
     plot_type: PLOT_TYPES
+    data_type: DATA_TYPES | str | None
     points: int
     x_min: float
     x_max: float
@@ -143,6 +154,7 @@ class PlotSummary(BaseModel):
     updated_at: datetime
     version: int
     colour_index: int
+    pinned: bool
     age_seconds: float
     expires_at: datetime
     ttl_remaining_seconds: float
