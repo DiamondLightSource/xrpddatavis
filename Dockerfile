@@ -28,7 +28,14 @@ RUN apt-get update && apt-get install -y \
 
 RUN apt-get install fonts-noto-color-emoji -y
 
-# Install helm for the dev container. This is the recommended 
+# Install Node.js/npm so the devcontainer's postCreateCommand can build the
+# frontend (see frontend/readme.md and .devcontainer/devcontainer.json) -
+# version matches the frontend-build stage below.
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && apt-get dist-clean
+
+# Install helm for the dev container. This is the recommended
 # approach per the docs: https://helm.sh/docs/intro/install
 RUN curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3; \
     chmod 700 get_helm.sh; \
@@ -89,7 +96,17 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y --no-ins
     nano \
     # May be required if attaching devcontainer
     libnss-ldapd \
-    && apt-get dist-clean 
+    # Required to install Node.js/npm below
+    ca-certificates \
+    curl \
+    && apt-get dist-clean
+
+# Install Node.js/npm so the frontend can be rebuilt when debugging inside
+# this container (see frontend/readme.md) - version matches the
+# frontend-build stage above.
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && apt-get dist-clean
 
 # Install uv to allow setup-scratch to run
 COPY --from=ghcr.io/astral-sh/uv:0.11 /uv /uvx /bin/

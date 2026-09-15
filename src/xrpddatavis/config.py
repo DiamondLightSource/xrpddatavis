@@ -6,6 +6,8 @@ import yaml
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from xrpddatavis.logger import logger
+
 
 class BeamlineConfig(BaseModel):
     # which beamline this instance is deployed on, e.g. "i11" - shown in the
@@ -64,8 +66,15 @@ class Config(BaseSettings):
 
         data = {}
         if path.exists():
+            logger.info("loading config from %s", path.resolve())
             with open(path) as f:
                 data = yaml.safe_load(f) or {}
+        else:
+            logger.info(
+                "no config file found at %s (cwd=%s) - using defaults",
+                path.resolve(),
+                Path.cwd(),
+            )
 
         # 1. load YAML into model
         # 2. allow env vars to override it
