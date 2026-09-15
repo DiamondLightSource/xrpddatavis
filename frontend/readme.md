@@ -33,6 +33,16 @@ Vite builds straight into [`../src/xrddatavis/static`](../src/xrddatavis/server.
 the FastAPI server serves that directory unchanged, so there is nothing else
 to wire up after a build.
 
+**The build output is never committed** - `src/xrddatavis/static/*` is
+gitignored, the same way compiled bytecode or a Python sdist's `build/`
+directory would be. `xrddatavis serve` needs it built first (it raises a
+clear error, rather than an obscure 500, if it's missing); the Dockerfile
+builds it during the image build; CI (`_test.yml`, `_dist.yml`) builds it
+before running tests or packaging a wheel. This keeps the ~900KB minified
+bundle (React, MUI, emotion and the app itself) and the ~150KB of
+self-hosted font files out of git history, where every frontend change
+would otherwise rewrite them in full, growing the repo forever.
+
 ## Develop
 
 ```sh
@@ -41,9 +51,10 @@ npm run dev       # http://localhost:5173, proxies API calls to :8000
 ```
 
 Run the real server alongside it so the dev proxy (`vite.config.ts`) has
-something to talk to:
+something to talk to - build the frontend once first, so it exists to serve:
 
 ```sh
+npm run build      # writes ../src/xrddatavis/static, once
 xrddatavis serve   # in the repo root, in another terminal
 ```
 
@@ -53,9 +64,10 @@ xrddatavis serve   # in the repo root, in another terminal
 npm run build      # writes ../src/xrddatavis/static
 ```
 
-The result is committed to the repo (it is what the Python package ships),
-and the Dockerfile also rebuilds it from source during the image build, so a
-container never depends on a possibly-stale committed copy.
+Needed before `xrddatavis serve` will start locally (see above) or before
+building a Python sdist/wheel by hand; CI and the Dockerfile both do this
+automatically as part of testing/packaging/the image build, so this is only
+something you run yourself for local dev.
 
 ## Notable choices
 

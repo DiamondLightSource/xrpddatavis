@@ -36,6 +36,14 @@ python -m xrddatavis --config config.yaml serve      # or: xrddatavis serve
 
 Then open <http://localhost:8000/>. The interactive API docs are at `/docs`.
 
+Installing from PyPI or the Docker image both ship the frontend already
+built. Running from a git checkout instead, build it once first - it's not
+committed to the repo (see [`frontend/readme.md`](frontend/readme.md)):
+
+```
+cd frontend && npm install && npm run build && cd ..
+```
+
 ## Try it with curl
 
 Post a bare `XYEData` document - `name`, `x` and `y` are the only required fields:

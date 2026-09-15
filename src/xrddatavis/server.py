@@ -301,5 +301,16 @@ def start_api(config: Config | None = None) -> FastAPI:
     )
 
     app.include_router(ROUTER)
+
+    if not (STATIC_DIR / "index.html").exists():
+        # The frontend (frontend/readme.md) is never committed - it's built
+        # fresh by `npm run build`, by the Dockerfile, and by CI when
+        # packaging - so a plain checkout won't have it yet.
+        raise RuntimeError(
+            f"Frontend build not found at {STATIC_DIR}. Build it first:\n"
+            "  cd frontend && npm install && npm run build\n"
+            "or use the Docker image, which builds it automatically - see "
+            "frontend/readme.md."
+        )
     app.mount(STATIC, StaticFiles(directory=STATIC_DIR), name="static")
     return app

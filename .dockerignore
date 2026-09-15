@@ -1,0 +1,17 @@
+.git
+
+# frontend/readme.md - built fresh inside the image by the frontend-build
+# stage; a host node_modules would be wrong-platform, and the built static/
+# output is regenerated and overlaid on top regardless (see Dockerfile)
+frontend/node_modules/
+frontend/*.tsbuildinfo
+src/xrddatavis/static/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv*
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/

@@ -26,6 +26,22 @@ jobs:
           # Need this to get version number from last tag
           fetch-depth: 0
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        # the frontend (frontend/readme.md) is never committed - build it
+        # into src/xrddatavis/static before the app is used, same as the
+        # Dockerfile does
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
       - name: Install uv
         uses: astral-sh/setup-uv@v10.0.0
 
