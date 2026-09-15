@@ -8,10 +8,10 @@ from fastapi import APIRouter, Body, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-import xrddatavis
-from xrddatavis._version import __version__
-from xrddatavis.config import Config
-from xrddatavis.endpoints import (
+import xrpddatavis
+from xrpddatavis._version import __version__
+from xrpddatavis.config import Config
+from xrpddatavis.endpoints import (
     CLEAR_PLOTS,
     EDIT_PLOT,
     EVENTS,
@@ -25,8 +25,8 @@ from xrddatavis.endpoints import (
     STATIC,
     UI,
 )
-from xrddatavis.logger import logger, suppress_polling_logs
-from xrddatavis.models import (
+from xrpddatavis.logger import logger, suppress_polling_logs
+from xrpddatavis.models import (
     LivePlots,
     PlotData,
     PlotRequest,
@@ -35,7 +35,7 @@ from xrddatavis.models import (
     PlotUpdate,
     XYEData,
 )
-from xrddatavis.store import ResultStore
+from xrpddatavis.store import ResultStore
 
 ROUTER = APIRouter()
 
@@ -257,7 +257,7 @@ async def _cleanup_loop(store: ResultStore, interval_seconds: int) -> None:
 async def lifespan(app: FastAPI):
     config: Config = app.state.config
     logger.info(
-        "xrddatavis started: %s (max_plots=%d, ttl=%ds)",
+        "xrpddatavis started: %s (max_plots=%d, ttl=%ds)",
         __version__,
         config.plots.max_plots,
         config.plots.ttl_seconds,
@@ -282,7 +282,7 @@ def start_api(config: Config | None = None) -> FastAPI:
     config = config or Config.load_config()
 
     app = FastAPI(
-        title=xrddatavis.__name__.capitalize(),
+        title=xrpddatavis.__name__.capitalize(),
         version=__version__,
         description=(
             "Post XYEData documents to /plot and watch them appear on the "

@@ -1,14 +1,14 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "xrddatavis.fullname" . }}
+  name: {{ include "xrpddatavis.fullname" . }}
   labels:
-    {{- include "xrddatavis.labels" . | nindent 4 }}
+    {{- include "xrpddatavis.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      {{- include "xrddatavis.selectorLabels" . | nindent 6 }}
+      {{- include "xrpddatavis.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       {{- with .Values.podAnnotations }}
@@ -16,7 +16,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "xrddatavis.labels" . | nindent 8 }}
+        {{- include "xrpddatavis.labels" . | nindent 8 }}
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -71,7 +71,7 @@ spec:
           projected:
             sources:
             - configMap:
-                name: {{ include "xrddatavis.fullname" . }}-config
+                name: {{ include "xrpddatavis.fullname" . }}-config
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -84,7 +84,7 @@ spec:
                   - key: app.kubernetes.io/name
                     operator: In
                     values:
-                      - xrddatavis
+                      - xrpddatavis
                   - key: app.kubernetes.io/instance
                     operator: In
                     values:

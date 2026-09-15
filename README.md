@@ -1,9 +1,9 @@
-[![CI](https://github.com/DiamondLightSource/xrddatavis/actions/workflows/ci.yml/badge.svg)](https://github.com/DiamondLightSource/xrddatavis/actions/workflows/ci.yml)
-[![Coverage](https://codecov.io/gh/DiamondLightSource/xrddatavis/branch/main/graph/badge.svg)](https://codecov.io/gh/DiamondLightSource/xrddatavis)
-[![PyPI](https://img.shields.io/pypi/v/xrddatavis.svg)](https://pypi.org/project/xrddatavis)
+[![CI](https://github.com/DiamondLightSource/xrpddatavis/actions/workflows/ci.yml/badge.svg)](https://github.com/DiamondLightSource/xrpddatavis/actions/workflows/ci.yml)
+[![Coverage](https://codecov.io/gh/DiamondLightSource/xrpddatavis/branch/main/graph/badge.svg)](https://codecov.io/gh/DiamondLightSource/xrpddatavis)
+[![PyPI](https://img.shields.io/pypi/v/xrpddatavis.svg)](https://pypi.org/project/xrpddatavis)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
-# xrddatavis
+# xrpddatavis
 
 A deployable API that can be sent XYEData json messages via POST and then plotted via a web front end.
 
@@ -23,15 +23,15 @@ Everything below is about the server; it doesn't change.
 
 What            | Where
 :---:           | :---:
-Source          | <https://github.com/DiamondLightSource/xrddatavis>
-PyPI            | `pip install xrddatavis`
-Docker          | `docker run ghcr.io/diamondlightsource/xrddatavis:latest`
-Releases        | <https://github.com/DiamondLightSource/xrddatavis/releases>
+Source          | <https://github.com/DiamondLightSource/xrpddatavis>
+PyPI            | `pip install xrpddatavis`
+Docker          | `docker run ghcr.io/diamondlightsource/xrpddatavis:latest`
+Releases        | <https://github.com/DiamondLightSource/xrpddatavis/releases>
 
 ## Run it
 
 ```
-python -m xrddatavis --config config.yaml serve      # or: xrddatavis serve
+python -m xrpddatavis --config config.yaml serve      # or: xrpddatavis serve
 ```
 
 Then open <http://localhost:8000/>. The interactive API docs are at `/docs`.
@@ -179,7 +179,7 @@ curl -X POST http://localhost:8000/plot -H 'Content-Type: application/json' \
 ### Watch it work end to end
 
 ```bash
-xrddatavis serve &                    # terminal 1
+xrpddatavis serve &                    # terminal 1
 python examples/feed_demo.py          # terminal 2: 3 scans x 5 data types = 15 plots
 ```
 
@@ -248,7 +248,7 @@ cleanup:
   interval_seconds: 300  # how often expired plots are swept up
 ```
 
-The same keys live under `config:` in `helm/xrddatavis/values.yaml`, so
+The same keys live under `config:` in `helm/xrpddatavis/values.yaml`, so
 `--set config.plots.max_plots=50` changes the limit on a deployment.
 
 ## Frontend notes

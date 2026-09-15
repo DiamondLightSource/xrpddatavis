@@ -18,7 +18,7 @@ const CONFIG: Partial<Config> = {
   displaylogo: false,
   scrollZoom: true,
   modeBarButtonsToRemove: ["select2d", "lasso2d"],
-  toImageButtonOptions: { filename: "xrddatavis", scale: 2 },
+  toImageButtonOptions: { filename: "xrpddatavis", scale: 2 },
 };
 
 /**

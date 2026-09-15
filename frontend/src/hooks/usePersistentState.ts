@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-const PREFIX = "xrddatavis.";
+const PREFIX = "xrpddatavis.";
 
 function read<T>(key: string, fallback: T): T {
   try {

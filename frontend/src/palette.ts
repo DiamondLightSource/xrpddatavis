@@ -1,7 +1,7 @@
 // Fixed categorical slot order - a colour follows a plot for its whole life,
 // it is never reassigned by position in the list. Past eight live plots the
 // slots repeat, so repeats are separated by line style as well as hue.
-// Values match src/xrddatavis/static/styles.css --series-* in the previous
+// Values match src/xrpddatavis/static/styles.css --series-* in the previous
 // frontend, and the dataviz skill's validated reference palette.
 export const PALETTE = {
   light: [

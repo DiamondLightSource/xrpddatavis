@@ -1,8 +1,8 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from xrddatavis.config import Config
-from xrddatavis.server import start_api
+from xrpddatavis.config import Config
+from xrpddatavis.server import start_api
 
 
 @pytest.fixture

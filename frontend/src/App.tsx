@@ -143,7 +143,7 @@ export default function App() {
             />
             <Divider orientation="vertical" flexItem sx={{ my: 1, borderColor: "divider" }} />
             <Typography variant="h6" sx={{ fontWeight: 700, flexShrink: 0, lineHeight: 1 }}>
-              xrddatavis
+              xrpddatavis
             </Typography>
             {beamline && (
               <>

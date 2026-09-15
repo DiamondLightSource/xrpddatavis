@@ -1995,7 +1995,7 @@ wheels = [
 ]
 
 [[package]]
-name = "xrddatavis"
+name = "xrpddatavis"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },

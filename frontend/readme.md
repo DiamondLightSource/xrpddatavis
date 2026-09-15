@@ -1,4 +1,4 @@
-xrddatavis frontend
+xrpddatavis frontend
 ====================
 
 The web UI at `/`, built with React, TypeScript, [MUI](https://mui.com), and
@@ -29,13 +29,13 @@ follows, from the design system's own docs:
 * Theme → [Logos](https://diamondlightsource.github.io/sci-react-ui/?path=/docs/theme-logos--docs) -
   see the note on `theme.logos` below.
 
-Vite builds straight into [`../src/xrddatavis/static`](../src/xrddatavis/server.py) -
+Vite builds straight into [`../src/xrpddatavis/static`](../src/xrpddatavis/server.py) -
 the FastAPI server serves that directory unchanged, so there is nothing else
 to wire up after a build.
 
-**The build output is never committed** - `src/xrddatavis/static/*` is
+**The build output is never committed** - `src/xrpddatavis/static/*` is
 gitignored, the same way compiled bytecode or a Python sdist's `build/`
-directory would be. `xrddatavis serve` needs it built first (it raises a
+directory would be. `xrpddatavis serve` needs it built first (it raises a
 clear error, rather than an obscure 500, if it's missing); the Dockerfile
 builds it during the image build; CI (`_test.yml`, `_dist.yml`) builds it
 before running tests or packaging a wheel. This keeps the ~900KB minified
@@ -54,17 +54,17 @@ Run the real server alongside it so the dev proxy (`vite.config.ts`) has
 something to talk to - build the frontend once first, so it exists to serve:
 
 ```sh
-npm run build      # writes ../src/xrddatavis/static, once
-xrddatavis serve   # in the repo root, in another terminal
+npm run build      # writes ../src/xrpddatavis/static, once
+xrpddatavis serve   # in the repo root, in another terminal
 ```
 
 ## Build
 
 ```sh
-npm run build      # writes ../src/xrddatavis/static
+npm run build      # writes ../src/xrpddatavis/static
 ```
 
-Needed before `xrddatavis serve` will start locally (see above) or before
+Needed before `xrpddatavis serve` will start locally (see above) or before
 building a Python sdist/wheel by hand; CI and the Dockerfile both do this
 automatically as part of testing/packaging/the image build, so this is only
 something you run yourself for local dev.

@@ -1,7 +1,7 @@
 replicaCount: 1
 
 image:
-  repository: ghcr.io/diamondlightsource/xrddatavis
+  repository: ghcr.io/diamondlightsource/xrpddatavis
   pullPolicy: Always
   tag: ""
 

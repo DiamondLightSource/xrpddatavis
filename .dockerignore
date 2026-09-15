@@ -5,7 +5,7 @@
 # output is regenerated and overlaid on top regardless (see Dockerfile)
 frontend/node_modules/
 frontend/*.tsbuildinfo
-src/xrddatavis/static/
+src/xrpddatavis/static/
 
 # Python
 __pycache__/

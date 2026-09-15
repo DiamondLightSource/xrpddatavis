@@ -8,8 +8,8 @@ from datetime import UTC, datetime
 from threading import Lock
 from uuid import UUID
 
-from xrddatavis.logger import logger
-from xrddatavis.models import PlotData, PlotSummary, PlotUpdate
+from xrpddatavis.logger import logger
+from xrpddatavis.models import PlotData, PlotSummary, PlotUpdate
 
 # number of slots in the frontend's fixed categorical palette
 PALETTE_SLOTS = 8

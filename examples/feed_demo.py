@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Post synthetic total-scattering data at a running xrddatavis server.
+"""Post synthetic total-scattering data at a running xrpddatavis server.
 
 Each "scan" mimics one PDFgetX3 job: a raw intensity curve I(Q), a powder
 pattern, and the derived S(Q) / F(Q) / G(r) curves it produces, all sharing

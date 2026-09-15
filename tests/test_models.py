@@ -1,6 +1,6 @@
 import pytest
 
-from xrddatavis.models import XYEData, get_instrument_session
+from xrpddatavis.models import XYEData, get_instrument_session
 
 
 @pytest.mark.parametrize(

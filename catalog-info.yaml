@@ -1,8 +1,8 @@
 apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
-  name: xrddatavis
-  title: xrddatavis
+  name: xrpddatavis
+  title: xrpddatavis
   description: A deployable API that can be sent XYEData json messages via POST and then plotted via a web front end
 spec:
   type: application

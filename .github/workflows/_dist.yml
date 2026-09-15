@@ -21,7 +21,7 @@ jobs:
 
       - name: Build frontend
         # the frontend (frontend/readme.md) is never committed - build it
-        # into src/xrddatavis/static so the sdist/wheel actually ships a UI
+        # into src/xrpddatavis/static so the sdist/wheel actually ships a UI
         working-directory: frontend
         run: |
           npm ci
@@ -55,7 +55,7 @@ jobs:
         run: |
           python -c "
           import importlib.resources, sys
-          index = importlib.resources.files('xrddatavis') / 'static' / 'index.html'
+          index = importlib.resources.files('xrpddatavis') / 'static' / 'index.html'
           if not index.is_file():
               sys.exit(f'{index} missing from the installed wheel - frontend build step failed?')
           print(f'found {index}')

@@ -3,7 +3,7 @@ requires = ["setuptools>=64", "setuptools_scm[toml]>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "xrddatavis"
+name = "xrpddatavis"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "License :: OSI Approved :: Apache Software License",
@@ -44,22 +44,22 @@ dev = [
 ]
 
 [project.scripts]
-xrddatavis = "xrddatavis.__main__:main"
+xrpddatavis = "xrpddatavis.__main__:main"
 
 [project.urls]
-GitHub = "https://github.com/DiamondLightSource/xrddatavis"
+GitHub = "https://github.com/DiamondLightSource/xrpddatavis"
 
 [[project.authors]] # Further authors may be added by duplicating this section
 email = "richard.dixey@diamond.ac.uk"
 name = "Richard Dixey"
 
 [tool.setuptools_scm]
-version_file = "src/xrddatavis/_version.py"
+version_file = "src/xrpddatavis/_version.py"
 
 [tool.setuptools.package-data]
 # the built web frontend (frontend/, built by Vite into here) ships inside
 # the wheel - see frontend/vite.config.ts and frontend/readme.md
-xrddatavis = ["static/*", "static/assets/*"]
+xrpddatavis = ["static/*", "static/assets/*"]
 
 [tool.pyright]
 typeCheckingMode = "standard"
@@ -81,7 +81,7 @@ testpaths = "docs src tests"
 
 [tool.coverage.run]
 patch = ["subprocess"]
-data_file = "/tmp/xrddatavis.coverage"
+data_file = "/tmp/xrpddatavis.coverage"
 
 [tool.coverage.paths]
 # Tests are run from installed location, map back to the src directory
@@ -128,7 +128,7 @@ description = "Run tests with coverage"
 commands = [
     [
         "pytest",
-        "--cov=xrddatavis",
+        "--cov=xrpddatavis",
         "--cov-report",
         "term",
         "--cov-report",

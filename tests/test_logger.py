@@ -1,6 +1,6 @@
 import logging
 
-from xrddatavis.logger import PollingLogFilter
+from xrpddatavis.logger import PollingLogFilter
 
 
 def record(path: str) -> logging.LogRecord:

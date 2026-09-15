@@ -2,8 +2,8 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from xrddatavis.models import PlotData, PlotUpdate, XYEData
-from xrddatavis.store import PALETTE_SLOTS, ResultStore
+from xrpddatavis.models import PlotData, PlotUpdate, XYEData
+from xrpddatavis.store import PALETTE_SLOTS, ResultStore
 
 
 def plot(name: str, age_seconds: float = 0.0, pinned: bool = False) -> PlotData:

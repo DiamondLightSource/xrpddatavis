@@ -1,14 +1,14 @@
 {{/*
 Expand the name of the chart.
 */}}
-{{- define "xrddatavis.name" -}}
+{{- define "xrpddatavis.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Expand the name of the chart.
 */}}
-{{- define "xrddatavis.fullname" -}}
+{{- define "xrpddatavis.fullname" -}}
 {{- if .Values.fullnameOverride }}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
 {{- else }}
@@ -24,16 +24,16 @@ Expand the name of the chart.
 {{/*
 Create chart name and version as used by the chart label.
 */}}
-{{- define "xrddatavis.chart" -}}
+{{- define "xrpddatavis.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Common labels
 */}}
-{{- define "xrddatavis.labels" -}}
-helm.sh/chart: {{ include "xrddatavis.chart" . }}
-{{ include "xrddatavis.selectorLabels" . }}
+{{- define "xrpddatavis.labels" -}}
+helm.sh/chart: {{ include "xrpddatavis.chart" . }}
+{{ include "xrpddatavis.selectorLabels" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
@@ -43,17 +43,17 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{/*
 Selector labels
 */}}
-{{- define "xrddatavis.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "xrddatavis.name" . }}
+{{- define "xrpddatavis.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "xrpddatavis.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
 Create the name of the service account to use
 */}}
-{{- define "xrddatavis.serviceAccountName" -}}
+{{- define "xrpddatavis.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
-{{- default (include "xrddatavis.fullname" .) .Values.serviceAccount.name }}
+{{- default (include "xrpddatavis.fullname" .) .Values.serviceAccount.name }}
 {{- else }}
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}

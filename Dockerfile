@@ -37,8 +37,8 @@ RUN curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/s
 RUN helm plugin install https://github.com/losisin/helm-values-schema-json.git --version 2.3.1
 
 # Builds the React/TypeScript frontend (see frontend/readme.md) into
-# src/xrddatavis/static, the same place the Python package expects it -
-# see src/xrddatavis/server.py and frontend/vite.config.ts.
+# src/xrpddatavis/static, the same place the Python package expects it -
+# see src/xrpddatavis/server.py and frontend/vite.config.ts.
 FROM node:20-slim AS frontend-build
 
 WORKDIR /repo/frontend
@@ -59,8 +59,8 @@ COPY . /app
 RUN chmod o+wrX .
 
 # Overlay a freshly built frontend, rather than trusting whatever was last
-# committed to src/xrddatavis/static
-COPY --from=frontend-build /repo/src/xrddatavis/static /app/src/xrddatavis/static
+# committed to src/xrpddatavis/static
+COPY --from=frontend-build /repo/src/xrpddatavis/static /app/src/xrpddatavis/static
 
 # Tell uv sync to install python in a known location so we can copy it out later
 ENV UV_PYTHON_INSTALL_DIR=/python
@@ -113,19 +113,19 @@ COPY --chown=1000:1000 --from=build /app/.venv /app/.venv
 RUN chmod -R 777 /app
 ENV PATH=/app/.venv/bin:$PATH
 
-# Add copy of xrddatavis source to container for debugging
+# Add copy of xrpddatavis source to container for debugging
 WORKDIR /workspaces
-COPY --chown=1000:1000 . xrddatavis
+COPY --chown=1000:1000 . xrpddatavis
 # Make allowance for non-1000 uid
-RUN chmod o+wrX xrddatavis
+RUN chmod o+wrX xrpddatavis
 
 # Make invariant symlink to site-packages for debugging
-# /app/.venv/lib/python/site-packages/xrddatavis:/workspaces/xrddatavis
+# /app/.venv/lib/python/site-packages/xrpddatavis:/workspaces/xrpddatavis
 WORKDIR /app/.venv/lib
 RUN ln -s python* python
 
 # Switch user 1000
 USER ubuntu
 
-ENTRYPOINT ["xrddatavis"]
+ENTRYPOINT ["xrpddatavis"]
 CMD ["serve"]

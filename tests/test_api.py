@@ -4,8 +4,8 @@ from datetime import UTC, datetime, timedelta
 from fastapi.testclient import TestClient
 
 from conftest import xye
-from xrddatavis.config import Config
-from xrddatavis.endpoints import (
+from xrpddatavis.config import Config
+from xrpddatavis.endpoints import (
     CLEAR_PLOTS,
     HEALTH_ROUTE,
     INFO,
@@ -14,7 +14,7 @@ from xrddatavis.endpoints import (
     PLOT,
     UI,
 )
-from xrddatavis.server import start_api
+from xrpddatavis.server import start_api
 
 
 def test_health(client):
@@ -38,7 +38,7 @@ def test_frontend_is_served(client):
     """The Vite-built React app (see frontend/) loads, and its bundle is servable."""
     response = client.get(UI)
     assert response.status_code == 200
-    assert "xrddatavis" in response.text
+    assert "xrpddatavis" in response.text
 
     match = re.search(r'src="(/static/assets/[^"]+\.js)"', response.text)
     assert match, (

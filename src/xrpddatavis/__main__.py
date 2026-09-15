@@ -1,11 +1,11 @@
-"""Interface for ``python -m xrddatavis``."""
+"""Interface for ``python -m xrpddatavis``."""
 
 from pathlib import Path
 
 import click
 
-from xrddatavis._version import __version__
-from xrddatavis.config import Config
+from xrpddatavis._version import __version__
+from xrpddatavis.config import Config
 
 __all__ = ["main"]
 
@@ -62,7 +62,7 @@ def serve(ctx: click.Context):
 
     import uvicorn
 
-    from xrddatavis.server import start_api
+    from xrpddatavis.server import start_api
 
     config = ctx.obj["config"]
 

@@ -35,7 +35,7 @@ jobs:
 
       - name: Build frontend
         # the frontend (frontend/readme.md) is never committed - build it
-        # into src/xrddatavis/static before the app is used, same as the
+        # into src/xrpddatavis/static before the app is used, same as the
         # Dockerfile does
         working-directory: frontend
         run: |

@@ -8,13 +8,13 @@ component_owner: group:default/data-analysis
 component_type: application
 description: A deployable API that can be sent XYEData json messages via POST and
     then plotted via a web front end
-distribution_name: xrddatavis
+distribution_name: xrpddatavis
 docker: true
 docs_type: README
 git_platform: github.com
 github_org: DiamondLightSource
-package_name: xrddatavis
+package_name: xrpddatavis
 pypi: true
-repo_name: xrddatavis
+repo_name: xrpddatavis
 strict_typing: false
 type_checker: pyright

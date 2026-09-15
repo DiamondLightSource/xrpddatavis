@@ -1,9 +1,9 @@
 import subprocess
 import sys
 
-from xrddatavis import __version__
+from xrpddatavis import __version__
 
 
 def test_cli_version():
-    cmd = [sys.executable, "-m", "xrddatavis", "--version"]
+    cmd = [sys.executable, "-m", "xrpddatavis", "--version"]
     assert subprocess.check_output(cmd).decode().strip() == __version__

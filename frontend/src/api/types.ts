@@ -1,4 +1,4 @@
-// Mirrors src/xrddatavis/models.py - keep these two in sync by hand.
+// Mirrors src/xrpddatavis/models.py - keep these two in sync by hand.
 
 export type PlotKind = "scatter" | "line" | "line+markers";
 
