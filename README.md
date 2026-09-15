@@ -16,6 +16,11 @@ for it appears automatically on the left, alongside quick filters for file numbe
 The server holds at most `plots.max_plots` at a time and clears each plot
 `plots.ttl_seconds` after it arrives.
 
+The frontend is a React + TypeScript app built with [MUI](https://mui.com) and
+Diamond's [SciReactUI](https://diamondlightsource.github.io/sci-react-ui/) design
+system - see [`frontend/`](frontend/readme.md) for its source and dev workflow.
+Everything below is about the server; it doesn't change.
+
 What            | Where
 :---:           | :---:
 Source          | <https://github.com/DiamondLightSource/xrddatavis>
@@ -86,6 +91,23 @@ curl -X POST http://localhost:8000/plot \
       "data_type": "gr",
       "x_label": "r / Å",
       "y_label": "G(r)"
+    }
+  }'
+```
+
+A `filepath` that looks like a real Diamond path (`/dls/BEAMLINE/data/YEAR/SESSION/...`)
+gives the plot an instrument session automatically - no extra field needed. It shows
+up in the title bar's session picker, which only appears once something needs it:
+
+```bash
+curl -X POST http://localhost:8000/plot \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "data": {
+      "name": "sample-001",
+      "x": [10.0, 10.1, 10.2],
+      "y": [120.0, 340.0, 118.0],
+      "filepath": "/dls/i11/data/2026/cm12345-1/sample-001.xye"
     }
   }'
 ```
@@ -172,6 +194,10 @@ python examples/feed_demo.py --live --interval 2 --count 30
 
 # a second "sample" starting at file number 100, so you can compare two sets
 python examples/feed_demo.py --start-filenumber 100
+
+# a second instrument session - now the title bar's session picker has two
+# entries to switch between
+python examples/feed_demo.py --start-filenumber 100 --instrument-session mg30000-1
 ```
 
 ## Endpoints
@@ -186,6 +212,7 @@ python examples/feed_demo.py --start-filenumber 100
 | `DELETE` | `/plots` | Delete every plot |
 | `GET` | `/events` | Server-sent events - one message whenever the set of plots changes |
 | `GET` | `/limits` | `max_plots` and `ttl_seconds` |
+| `GET` | `/info` | Static app metadata for the UI title bar (currently just `beamline`) |
 | `GET` | `/healthz` | Liveness/readiness |
 | `GET` | `/` | The web frontend |
 
@@ -200,6 +227,9 @@ server:
   host: "0.0.0.0"
   port: 8000
   suppress_polling_logs: true   # drop access logs for /liveplots, /events, /healthz
+
+beamline:
+  name: "i11"  # shown in the UI title bar; blank outside a beamline deployment
 
 plots:
   max_plots: 20        # most plots held - and displayable - at once; oldest is evicted
@@ -221,14 +251,25 @@ The same keys live under `config:` in `helm/xrddatavis/values.yaml`, so
   plot a slot in a fixed eight-colour palette validated for colour-vision
   deficiency, and holds it for the plot's lifetime. Click a swatch to change it.
 * Double-click a name in the table to rename it.
-* Plotly is loaded from cdnjs; the page says so plainly if the browser cannot
-  reach it.
+* Plotly is loaded from cdnjs rather than bundled - see
+  [`frontend/readme.md`](frontend/readme.md) for why.
+* Light/dark follows the system by default; the moon/sun button in the top
+  bar overrides it (MUI's colour scheme system, themed by SciReactUI's
+  `DiamondDSTheme`).
+* A plot's **instrument session** (e.g. `cm12345-1`) is read from its
+  `filepath` - `/dls/BEAMLINE/data/YEAR/SESSION/...` - unless it's set
+  explicitly via `data.instrument_session`. A dropdown next to the beamline
+  name in the title bar lists whatever sessions are currently live and
+  narrows the whole view to one; it only appears once at least one plot has
+  a resolvable session, and hides on narrower screens along with the
+  beamline name.
 * **Type** tabs and **File #** chips above the table filter it down, and combine
-  with each other and the free-text search. A tab/chip only exists while at least
-  one live plot needs it, and disappears again once that plot expires or is
-  deleted. A **Reset** button appears next to the search box whenever a filter is
-  active. Filtering only changes what is *listed* - your current selection (and
-  therefore what is drawn) is untouched by it.
+  with each other, the instrument-session picker and the free-text search. A
+  tab/chip only exists while at least one live plot needs it, and disappears
+  again once that plot expires or is deleted. A **Reset** button appears next
+  to the search box whenever a filter is active. Filtering only changes what
+  is *listed* - your current selection (and therefore what is drawn) is
+  untouched by it.
 * Click the 📌 next to a plot's TTL to **pin** it - a pinned plot is skipped by
   `ttl_seconds` expiry (and, while any unpinned plot remains, by `max_plots`
   eviction too) until it is unpinned or deleted by hand. `max_plots` is still a
@@ -236,8 +277,14 @@ The same keys live under `config:` in `helm/xrddatavis/values.yaml`, so
   rather than refusing new data.
 * The plot list is **resizable** - drag the thin handle on the sidebar's right
   edge (or focus it and use the arrow keys). Its width is remembered per browser.
-* **Upload file…** plots a local 2- or 3-column file (x, y, optionally e) without
-  writing any curl - pick a delimiter (or leave it on auto-detect), tick "first
-  row is a header" to pull axis labels from it, and optionally tag a name, data
-  type and file number before plotting. Parsing happens entirely in the browser;
-  the result is POSTed to `/plot` like anything else.
+* **Upload file…** plots a local column file without writing any curl. It
+  scans for where the numeric data actually starts, so real instrument
+  formats work directly - a PDFgetX2 `.gr`/`.sq`/`.fq`/`.iq` file's 100+
+  line `key=value`/SPEC-metadata preamble is skipped automatically, and its
+  `#L` column-name line (or a plain header row, for simpler files) is read
+  for axis labels. Pick which column is X, Y and (optional) error - sensible
+  defaults are pre-selected but always adjustable, since a file's column
+  order isn't always x/y/e. If the data's start can't be found automatically
+  (an unusual or ambiguous file), it asks for the number of header lines to
+  skip instead. Parsing happens entirely in the browser; the result is
+  POSTed to `/plot` like anything else.

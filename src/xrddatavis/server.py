@@ -16,6 +16,7 @@ from xrddatavis.endpoints import (
     EDIT_PLOT,
     EVENTS,
     HEALTH_ROUTE,
+    INFO,
     LIMITS,
     LIVEPLOTS,
     PLOT,
@@ -64,6 +65,13 @@ async def limits(request: Request) -> dict[str, int]:
     """The display limits the frontend has to honour."""
     store = get_store(request)
     return {"max_plots": store.max_plots, "ttl_seconds": store.ttl_seconds}
+
+
+@ROUTER.get(INFO, tags=["health"])
+async def info(request: Request) -> dict[str, str]:
+    """Static app metadata for the UI title bar - currently just the beamline."""
+    config = get_config(request)
+    return {"beamline": config.beamline.name}
 
 
 @ROUTER.post(PLOT, tags=["plots"], status_code=201)

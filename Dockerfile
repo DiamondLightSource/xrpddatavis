@@ -36,6 +36,19 @@ RUN curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/s
     rm get_helm.sh
 RUN helm plugin install https://github.com/losisin/helm-values-schema-json.git --version 2.3.1
 
+# Builds the React/TypeScript frontend (see frontend/readme.md) into
+# src/xrddatavis/static, the same place the Python package expects it -
+# see src/xrddatavis/server.py and frontend/vite.config.ts.
+FROM node:20-slim AS frontend-build
+
+WORKDIR /repo/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm npm ci
+
+WORKDIR /repo
+COPY frontend/ frontend/
+RUN cd frontend && npm run build
+
 # The build stage installs the context into the venv
 FROM developer AS build
 
@@ -44,6 +57,10 @@ FROM developer AS build
 WORKDIR /app
 COPY . /app
 RUN chmod o+wrX .
+
+# Overlay a freshly built frontend, rather than trusting whatever was last
+# committed to src/xrddatavis/static
+COPY --from=frontend-build /repo/src/xrddatavis/static /app/src/xrddatavis/static
 
 # Tell uv sync to install python in a known location so we can copy it out later
 ENV UV_PYTHON_INSTALL_DIR=/python

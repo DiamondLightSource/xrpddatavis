@@ -3,7 +3,9 @@ repos:
     rev: v6.0.0
     hooks:
       - id: check-added-large-files
-        exclude: ^uv.lock
+        # uv.lock and the built frontend bundle (frontend/readme.md) are both
+        # generated, checked in for reproducibility, and expected to be large
+        exclude: ^(uv\.lock|src/xrddatavis/static/assets/)
       - id: check-yaml
       - id: check-merge-conflict
       - id: end-of-file-fixer

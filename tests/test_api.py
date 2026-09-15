@@ -1,14 +1,20 @@
+import re
 from datetime import UTC, datetime, timedelta
 
+from fastapi.testclient import TestClient
+
 from conftest import xye
+from xrddatavis.config import Config
 from xrddatavis.endpoints import (
     CLEAR_PLOTS,
     HEALTH_ROUTE,
+    INFO,
     LIMITS,
     LIVEPLOTS,
     PLOT,
     UI,
 )
+from xrddatavis.server import start_api
 
 
 def test_health(client):
@@ -19,11 +25,26 @@ def test_limits_come_from_config(client):
     assert client.get(LIMITS).json() == {"max_plots": 3, "ttl_seconds": 60}
 
 
+def test_info_reports_the_beamline(client):
+    assert client.get(INFO).json() == {"beamline": "i11"}
+
+
+def test_info_beamline_defaults_to_empty_string():
+    with TestClient(start_api(Config())) as blank_client:
+        assert blank_client.get(INFO).json() == {"beamline": ""}
+
+
 def test_frontend_is_served(client):
+    """The Vite-built React app (see frontend/) loads, and its bundle is servable."""
     response = client.get(UI)
     assert response.status_code == 200
     assert "xrddatavis" in response.text
-    assert client.get("/static/app.js").status_code == 200
+
+    match = re.search(r'src="(/static/assets/[^"]+\.js)"', response.text)
+    assert match, (
+        "index.html has no bundled script tag - was `npm run build` run in frontend/?"
+    )
+    assert client.get(match.group(1)).status_code == 200
 
 
 def test_post_bare_xye_data(client):
@@ -87,6 +108,35 @@ def test_data_type_is_optional_and_defaults_to_null(client):
     client.post(PLOT, json=xye("untyped"))
     summary = client.get(LIVEPLOTS).json()["plots"][0]
     assert summary["data_type"] is None
+
+
+def test_instrument_session_is_derived_from_filepath(client):
+    client.post(
+        PLOT,
+        json=xye("scan", filepath="/dls/i11/data/2026/cm12345-1/scan.xye"),
+    )
+    summary = client.get(LIVEPLOTS).json()["plots"][0]
+    assert summary["instrument_session"] == "cm12345-1"
+
+
+def test_instrument_session_explicit_value_wins_over_filepath(client):
+    client.post(
+        PLOT,
+        json=xye(
+            "scan",
+            filepath="/dls/i11/data/2026/cm12345-1/scan.xye",
+            instrument_session="mg99999-9",
+        ),
+    )
+    summary = client.get(LIVEPLOTS).json()["plots"][0]
+    assert summary["instrument_session"] == "mg99999-9"
+
+
+def test_instrument_session_is_null_when_unresolvable(client):
+    client.post(PLOT, json=xye("no-path"))
+    client.post(PLOT, json=xye("odd-path", filepath="/not/a/dls/path.xye"))
+    sessions = [p["instrument_session"] for p in client.get(LIVEPLOTS).json()["plots"]]
+    assert sessions == [None, None]
 
 
 def test_data_type_can_be_edited(client):

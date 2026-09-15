@@ -73,3 +73,7 @@ lockfiles/
 
 # ruff cache
 .ruff_cache/
+
+# frontend (frontend/readme.md) - node_modules only; the build output at
+# src/xrddatavis/static is committed, since it's what the package ships
+frontend/node_modules/

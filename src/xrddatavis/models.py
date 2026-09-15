@@ -1,4 +1,6 @@
+import re
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Literal, Self
 from uuid import UUID, uuid4
 
@@ -12,6 +14,57 @@ def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+def get_instrument_session(filepath: str) -> str:
+    """
+    Extract the INSTRUMENT_SESSION component from a Diamond-style file path.
+
+    Expected path shape:
+        /dls/BEAMLINE/data/YEAR/INSTRUMENT_SESSION/...
+
+    Returns the instrument session string, e.g. "cm12345-1".
+
+    Raises If the path doesn't match the expected structure.
+    """
+    parts = Path(filepath).parts
+
+    # Regex for each relevant path segment
+    beamline_re = re.compile(r"^[a-zA-Z]\d+(-\d+)?$")
+    year_re = re.compile(r"^\d{4}$")
+    session_re = re.compile(r"^[a-zA-Z]{2}\d+-\d+$")
+
+    # Find 'dls' as an anchor, then walk forward from there
+    try:
+        dls_index = next(i for i, p in enumerate(parts) if p.lower() == "dls")
+    except StopIteration as e:
+        raise ValueError(f"Path does not contain a 'dls' root: {filepath!r}") from e
+
+    try:
+        beamline = parts[dls_index + 1]
+        data_segment = parts[dls_index + 2]
+        year = parts[dls_index + 3]
+        instrument_session = parts[dls_index + 4]
+    except IndexError as e:
+        raise ValueError(
+            f"Path is too short to contain expected structure: {filepath!r}, {e}"  # noqa
+        ) from e
+
+    if not beamline_re.match(beamline):
+        raise ValueError(f"Unexpected BEAMLINE format: {beamline!r}")
+
+    if data_segment.lower() != "data":
+        raise ValueError(f"Expected 'data' segment, got: {data_segment!r}")
+
+    if not year_re.match(year):
+        raise ValueError(f"Unexpected YEAR format: {year!r}")
+
+    if not session_re.match(instrument_session):
+        raise ValueError(
+            f"Unexpected INSTRUMENT_SESSION format: {instrument_session!r}"
+        )
+
+    return instrument_session
+
+
 class XYEData(BaseModel):
     """A single 1D trace: x, y and optional y errors."""
 
@@ -21,6 +74,9 @@ class XYEData(BaseModel):
     e: list[float] | None = None
     filepath: str | None = None
     filenumber: int | None = None
+    # explicit override for get_instrument_session() - usually left unset and
+    # derived from filepath instead
+    instrument_session: str | None = None
     # axis labels for the frontend, e.g. "2θ / °" and "Intensity / counts"
     x_label: str | None = None
     y_label: str | None = None
@@ -39,6 +95,22 @@ class XYEData(BaseModel):
                 f"e must be the same length as x (got {len(self.e)} and {len(self.x)})"
             )
         return self
+
+    def get_instrument_session(self) -> str | None:
+        """Return instrument session if its not none, otherwise
+        try and determine it from the filepath"""
+
+        if self.instrument_session is not None:
+            return self.instrument_session
+        if self.filepath is not None:
+            try:
+                return get_instrument_session(self.filepath)
+            except ValueError:
+                # filepath doesn't match the expected /dls/BEAMLINE/data/YEAR/SESSION
+                # shape - not every plot has a Diamond-style path, so this is
+                # expected rather than exceptional
+                return None
+        return None
 
 
 class PlotRequest(BaseModel):
@@ -123,6 +195,7 @@ class PlotData(BaseModel):
             has_fit=self.fit is not None,
             filepath=self.data.filepath,
             filenumber=self.data.filenumber,
+            instrument_session=self.data.get_instrument_session(),
             created_at=self.created_at,
             updated_at=self.updated_at,
             version=self.version,
@@ -150,6 +223,7 @@ class PlotSummary(BaseModel):
     has_fit: bool
     filepath: str | None
     filenumber: int | None
+    instrument_session: str | None
     created_at: datetime
     updated_at: datetime
     version: int

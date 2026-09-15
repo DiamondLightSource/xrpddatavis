@@ -119,7 +119,9 @@ GENERATORS = {
 }
 
 
-def payload(name, x, y, e, filenumber, x_label, y_label, data_type, fit=None) -> dict:
+def payload(
+    name, x, y, e, filenumber, x_label, y_label, data_type, instrument_session, fit=None
+) -> dict:
     ext = AXES[data_type][2]
     body = {
         "data": {
@@ -127,7 +129,9 @@ def payload(name, x, y, e, filenumber, x_label, y_label, data_type, fit=None) ->
             "x": x.tolist(),
             "y": y.tolist(),
             "e": e.tolist(),
-            "filepath": f"/dls/i11/data/2026/cm12345-1/{name}.{ext}",
+            # a real Diamond-style path - the server pulls the instrument
+            # session out of this (see XYEData.get_instrument_session)
+            "filepath": f"/dls/i11/data/2026/{instrument_session}/{name}.{ext}",
             "filenumber": filenumber,
             "x_label": x_label,
             "y_label": y_label,
@@ -173,6 +177,12 @@ def main() -> None:
         "--start-filenumber", type=int, default=1, help="file number of the first scan"
     )
     parser.add_argument(
+        "--instrument-session",
+        default="cm12345-1",
+        help="instrument session to embed in each plot's filepath, e.g. cm12345-1 "
+        "(run twice with different sessions to see the picker in the title bar)",
+    )
+    parser.add_argument(
         "--live",
         action="store_true",
         help="repeatedly upsert one trace (of --types' first type) instead of "
@@ -203,6 +213,7 @@ def main() -> None:
                 x_label=x_label,
                 y_label=y_label,
                 data_type=data_type,
+                instrument_session=args.instrument_session,
             )
             body["upsert"] = True
             post(endpoint, body, f"live-scan update {index + 1} [{data_type}]")
@@ -223,7 +234,16 @@ def main() -> None:
                 fit = np.convolve(y, kernel, mode="same")
             name = f"{data_type}-{filenumber:03d}"
             body = payload(
-                name, x, y, e, filenumber, x_label, y_label, data_type, fit=fit
+                name,
+                x,
+                y,
+                e,
+                filenumber,
+                x_label,
+                y_label,
+                data_type,
+                args.instrument_session,
+                fit=fit,
             )
             post(endpoint, body, f"{name} [{data_type}] file #{filenumber}")
         if args.interval and scan < args.count - 1:

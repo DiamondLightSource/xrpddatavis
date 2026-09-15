@@ -7,6 +7,12 @@ from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+class BeamlineConfig(BaseModel):
+    # which beamline this instance is deployed on, e.g. "i11" - shown in the
+    # frontend's title bar. Left blank outside a beamline deployment.
+    name: str = ""
+
+
 class ServerConfig(BaseModel):
     host: str = "0.0.0.0"
     port: int = 8000
@@ -33,15 +39,11 @@ class CleanupConfig(BaseModel):
     interval_seconds: int = Field(default=300, ge=1)
 
 
-class AlertConfig(BaseModel):
-    slack_webhook_url: str | None = None
-
-
 class Config(BaseSettings):
     server: ServerConfig = Field(default_factory=ServerConfig)
+    beamline: BeamlineConfig = Field(default_factory=BeamlineConfig)
     plots: PlotsConfig = Field(default_factory=PlotsConfig)
     cleanup: CleanupConfig = Field(default_factory=CleanupConfig)
-    alerts: AlertConfig = Field(default_factory=AlertConfig)
 
     model_config = SettingsConfigDict(
         env_nested_delimiter="__",

@@ -57,8 +57,9 @@ name = "Richard Dixey"
 version_file = "src/xrddatavis/_version.py"
 
 [tool.setuptools.package-data]
-# the web frontend ships inside the wheel
-xrddatavis = ["static/*"]
+# the built web frontend (frontend/, built by Vite into here) ships inside
+# the wheel - see frontend/vite.config.ts and frontend/readme.md
+xrddatavis = ["static/*", "static/assets/*"]
 
 [tool.pyright]
 typeCheckingMode = "standard"

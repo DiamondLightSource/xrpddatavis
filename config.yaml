@@ -1,3 +1,6 @@
+beamline:
+  name: "ixx" # beamline this instance is deployed on, shown in the UI title bar
+
 server:
   host: "localhost"
   port: 8000
@@ -10,6 +13,3 @@ plots:
 
 cleanup:
   interval_seconds: 300 #frequency of checking for deletable results
-
-alerts:
-  slack_webhook_url: "" # Webhook URL for sending alerts to Slack, leave empty to disable
