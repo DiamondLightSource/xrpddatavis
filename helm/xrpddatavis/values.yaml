@@ -72,8 +72,6 @@ config:
     # which beamline this deployment serves, e.g. "i15-1" - shown in the UI
     # title bar. Set per beamline, e.g. --set config.beamline.name=i15-1
     name: ""
-  queue:
-    workers: 4
   plots:
     # maximum number of plots held - and therefore displayable - at once.
     # Posting past this evicts the oldest plot.
@@ -85,8 +83,6 @@ config:
   cleanup:
     # how often expired plots are swept up
     interval_seconds: 300
-  uvicorn:
-    workers: 1
   logging:
     graylog:
       enabled: false
