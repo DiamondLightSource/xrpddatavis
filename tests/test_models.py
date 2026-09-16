@@ -1,6 +1,12 @@
 import pytest
 
-from xrpddatavis.models import DataPlot, FittedDataPlot, XYEData, get_instrument_session
+from xrpddatavis.models import (
+    DataPlot,
+    FittedDataPlot,
+    XYEData,
+    get_filenumber_from_filepath,
+    get_instrument_session_from_filepath,
+)
 
 
 @pytest.mark.parametrize(
@@ -12,7 +18,7 @@ from xrpddatavis.models import DataPlot, FittedDataPlot, XYEData, get_instrument
     ],
 )
 def test_get_instrument_session_extracts_the_session(filepath, expected):
-    assert get_instrument_session(filepath) == expected
+    assert get_instrument_session_from_filepath(filepath) == expected
 
 
 @pytest.mark.parametrize(
@@ -27,7 +33,7 @@ def test_get_instrument_session_extracts_the_session(filepath, expected):
 )
 def test_get_instrument_session_rejects_paths_that_do_not_match(filepath):
     with pytest.raises(ValueError):
-        get_instrument_session(filepath)
+        get_instrument_session_from_filepath(filepath)
 
 
 def test_dataplot_get_instrument_session_prefers_explicit_value():
@@ -81,3 +87,14 @@ def test_fitteddataplot_difference_uses_explicit_diff_when_present():
 def test_fitteddataplot_difference_falls_back_to_obs_minus_calc():
     fit = FittedDataPlot(title="n", x=[1.0, 2.0], y=[10.0, 20.0], calc=[9.0, 21.0])
     assert fit.difference == [1.0, -1.0]
+
+
+def test_get_filenumber():
+
+    filepath = "/dls/i15-1/data/2026/cm12345-1/i15-1-12345.nxs"
+
+    assert get_filenumber_from_filepath(filepath) == 12345
+
+    filepath = "/dls/i11/data/2026/cm12345-1/i11-80081.nxs"
+
+    assert get_filenumber_from_filepath(filepath) == 80081

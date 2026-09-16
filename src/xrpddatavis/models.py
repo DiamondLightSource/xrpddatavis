@@ -15,16 +15,30 @@ def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
-def get_instrument_session(filepath: str) -> str:
+def get_filenumber_from_filepath(filepath: str) -> int:
+    """Try to get a filenumber from the filepath
+    Raises if it doesn't fine a filenumber
+
     """
-    Extract the INSTRUMENT_SESSION component from a Diamond-style file path.
+    filename = Path(filepath).stem
 
-    Expected path shape:
-        /dls/BEAMLINE/data/YEAR/INSTRUMENT_SESSION/...
+    matches = re.findall(r"\d+", filename)
 
-    Returns the instrument session string, e.g. "cm12345-1".
+    if not matches:
+        raise ValueError(f"No number found in filename: {filename}")
 
-    Raises If the path doesn't match the expected structure.
+    return int(matches[-1])
+
+
+def get_instrument_session_from_filepath(filepath: str) -> str:
+    """
+    Extract the INSTRUMENT_SESSION component from a file path.
+
+    Expects: /dls/BEAMLINE/data/YEAR/INSTRUMENT_SESSION/...
+
+    Returns the instrument session string, e.g. "cm12345-1"
+
+    Raises if the path doesn't find a instrument sesh.
     """
     parts = Path(filepath).parts
 
@@ -97,6 +111,8 @@ class DataPlot(XYEData):
     """
 
     filepath: str | None = None
+    # explicit override for get_filenumber() - usually left unset and derived
+    # from filepath instead
     filenumber: int | None = None
     # explicit override for get_instrument_session() - usually left unset and
     # derived from filepath instead
@@ -116,15 +132,28 @@ class DataPlot(XYEData):
 
         if self.instrument_session is not None:
             return self.instrument_session
-        if self.filepath is not None:
+        elif self.filepath is not None:
             try:
-                return get_instrument_session(self.filepath)
+                return get_instrument_session_from_filepath(self.filepath)
             except ValueError:
                 # filepath doesn't match the expected /dls/BEAMLINE/data/YEAR/SESSION
                 # shape - not every plot has a Diamond-style path, so this is
                 # expected rather than exceptional
                 return None
-        return None
+        else:
+            return None
+
+    def get_filenumber(self) -> int | None:
+        if self.filenumber is not None:
+            return self.filenumber
+        elif self.filepath is not None:
+            try:
+                return get_filenumber_from_filepath(self.filepath)
+            except ValueError:
+                # there is no filenumber in the filepath or no
+                return None
+        else:
+            return None
 
 
 class FittedDataPlot(DataPlot):
@@ -224,7 +253,7 @@ class PlotData(BaseModel):
             has_errors=self.data.e is not None,
             has_fit=isinstance(self.data, FittedDataPlot),
             filepath=self.data.filepath,
-            filenumber=self.data.filenumber,
+            filenumber=self.data.get_filenumber(),
             instrument_session=self.data.get_instrument_session(),
             created_at=self.created_at,
             updated_at=self.updated_at,
