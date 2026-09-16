@@ -62,3 +62,19 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Install Helm
+        uses: Azure/setup-helm@v4.3.1
+        id: install
+
+      - name: Helm login to GHCR
+        if: inputs.publish && github.ref_type == 'tag'
+        run: |
+          echo ${{ secrets.GITHUB_TOKEN }} | helm registry login ghcr.io --username ${{ github.repository_owner }} --password-stdin
+
+      - name: Package and push chart
+        if: inputs.publish && github.ref_type == 'tag'
+        run: |
+          helm dependencies update helm/xrpddatavis
+          helm package helm/xrpddatavis --version ${{ steps.meta.outputs.version }} --app-version ${{ steps.meta.outputs.version }} -d /tmp/
+          helm push /tmp/xrpddatavis-${{ steps.meta.outputs.version }}.tgz oci://ghcr.io/diamondlightsource/charts
