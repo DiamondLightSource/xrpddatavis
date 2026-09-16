@@ -65,7 +65,7 @@ class ResultStore:
                 (
                     item
                     for item in self._items.values()
-                    if item.data.name == response.data.name
+                    if item.data.title == response.data.title
                 ),
                 None,
             )
@@ -75,8 +75,6 @@ class ResultStore:
                 stored = response
             else:
                 existing.data = response.data
-                existing.fit = response.fit
-                existing.plot_type = response.plot_type
                 existing.created_at = response.created_at
                 existing.updated_at = response.updated_at
                 existing.version += 1
@@ -108,9 +106,9 @@ class ResultStore:
             if plot is None:
                 return None
             if changes.name is not None:
-                plot.data.name = changes.name
+                plot.data.title = changes.name
             if changes.plot_type is not None:
-                plot.plot_type = changes.plot_type
+                plot.data.plot_type = changes.plot_type
             if changes.colour_index is not None:
                 plot.colour_index = changes.colour_index % PALETTE_SLOTS
             if changes.data_type is not None:

@@ -47,7 +47,7 @@ def test_frontend_is_served(client):
     assert client.get(match.group(1)).status_code == 200
 
 
-def test_post_bare_xye_data(client):
+def test_post_plain_dataplot(client):
     response = client.post(PLOT, json=xye("sample-001"))
     assert response.status_code == 201
     body = response.json()
@@ -65,14 +65,17 @@ def test_post_bare_xye_data(client):
     assert 0 < summary["ttl_remaining_seconds"] <= 60
 
 
-def test_post_wrapped_request_with_fit(client):
+def test_post_fitted_dataplot(client):
     response = client.post(
         PLOT,
-        json={
-            "data": xye("sample-002", e=[1.0] * 5, filenumber=7, x_label="2theta"),
-            "fit": xye("sample-002 fit"),
-            "plot_type": "scatter",
-        },
+        json=xye(
+            "sample-002",
+            e=[1.0] * 5,
+            filenumber=7,
+            x_label="2theta",
+            plot_type="scatter",
+            calc=[0.0, 0.9, 4.1, 8.8, 16.2],
+        ),
     )
     assert response.status_code == 201
     plot_id = response.json()["id"]
@@ -86,14 +89,31 @@ def test_post_wrapped_request_with_fit(client):
     full = client.get(f"/plot/{plot_id}").json()
     assert full["data"]["e"] == [1.0] * 5
     assert full["data"]["x_label"] == "2theta"
-    assert full["fit"]["name"] == "sample-002 fit"
+    assert full["data"]["calc"] == [0.0, 0.9, 4.1, 8.8, 16.2]
+
+
+def test_fitted_dataplot_carries_diff_background_and_markers(client):
+    response = client.post(
+        PLOT,
+        json=xye(
+            "sample-003",
+            calc=[0.1, 0.9, 4.2, 8.7, 16.1],
+            diff=[-0.1, 0.1, -0.2, 0.3, -0.1],
+            background=5.0,
+            markers=[1.5, 2.5, 3.5],
+        ),
+    )
+    assert response.status_code == 201
+    plot_id = response.json()["id"]
+
+    full = client.get(f"/plot/{plot_id}").json()["data"]
+    assert full["diff"] == [-0.1, 0.1, -0.2, 0.3, -0.1]
+    assert full["background"] == 5.0
+    assert full["markers"] == [1.5, 2.5, 3.5]
 
 
 def test_data_type_flows_through_summary_and_full_data(client):
-    response = client.post(
-        PLOT,
-        json={"data": xye("gr-001", filenumber=3, data_type="gr")},
-    )
+    response = client.post(PLOT, json=xye("gr-001", filenumber=3, data_type="gr"))
     assert response.status_code == 201
     plot_id = response.json()["id"]
 
@@ -181,7 +201,7 @@ def test_pinned_plot_is_evicted_only_once_everything_else_is_pinned(client):
 
 
 def test_mismatched_array_lengths_are_rejected(client):
-    response = client.post(PLOT, json={"name": "bad", "x": [1, 2, 3], "y": [1, 2]})
+    response = client.post(PLOT, json={"title": "bad", "x": [1, 2, 3], "y": [1, 2]})
     assert response.status_code == 422
     assert "same length" in response.text
 
@@ -210,9 +230,7 @@ def test_colours_are_unique_while_slots_are_free(client):
 
 def test_upsert_replaces_in_place_and_keeps_identity(client):
     first = client.post(PLOT, json=xye("live-scan")).json()
-    second = client.post(
-        PLOT, json={"data": xye("live-scan", points=9), "upsert": True}
-    ).json()
+    second = client.post(PLOT, json=xye("live-scan", points=9, upsert=True)).json()
 
     assert second["id"] == first["id"]
     plots = client.get(LIVEPLOTS).json()["plots"]

@@ -85,7 +85,7 @@ export function ChartPanel({
         <Typography variant="body2" sx={{ color: "text.muted", mt: 0.5 }}>
           {hasAnyPlots
             ? "Tick a plot in the table on the left to draw it. Tick several to overlay them."
-            : <>POST an XYEData document to <code>/plot</code> and it will appear here.</>}
+            : <>POST a DataPlot document to <code>/plot</code> and it will appear here.</>}
         </Typography>
       </>
     );
@@ -135,7 +135,10 @@ export function ChartPanel({
           {(
             [
               ["errors", "Error bars"],
-              ["fits", "Fits"],
+              ["calc", "Calc"],
+              ["diff", "Diff"],
+              ["background", "Background"],
+              ["markers", "Markers"],
               ["logy", "Log y"],
               ["normalise", "Normalise"],
             ] as const

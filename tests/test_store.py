@@ -2,14 +2,14 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from xrpddatavis.models import PlotData, PlotUpdate, XYEData
+from xrpddatavis.models import DataPlot, PlotData, PlotUpdate, XYEData
 from xrpddatavis.store import PALETTE_SLOTS, ResultStore
 
 
-def plot(name: str, age_seconds: float = 0.0, pinned: bool = False) -> PlotData:
+def plot(title: str, age_seconds: float = 0.0, pinned: bool = False) -> PlotData:
     created = datetime.now(UTC) - timedelta(seconds=age_seconds)
     return PlotData(
-        data=XYEData(name=name, x=[1.0, 2.0], y=[3.0, 4.0]),
+        data=DataPlot(title=title, x=[1.0, 2.0], y=[3.0, 4.0]),
         created_at=created,
         pinned=pinned,
     )
@@ -22,7 +22,7 @@ def test_add_evicts_oldest_beyond_max_plots():
     _, evicted = store.add(plot("c"))
 
     assert [item.id for item in evicted] == [oldest.id]
-    assert {item.data.name for item in store.list()} == {"b", "c"}
+    assert {item.data.title for item in store.list()} == {"b", "c"}
 
 
 def test_colour_slots_are_reused_once_freed():
@@ -49,7 +49,7 @@ def test_upsert_keeps_id_and_colour_and_bumps_version():
     original = store.upsert(plot("scan"))[0]
 
     replacement = PlotData(
-        data=XYEData(name="scan", x=[1.0, 2.0, 3.0], y=[9.0, 9.0, 9.0])
+        data=DataPlot(title="scan", x=[1.0, 2.0, 3.0], y=[9.0, 9.0, 9.0])
     )
     updated = store.upsert(replacement)[0]
 
@@ -66,7 +66,7 @@ def test_purge_expired():
     store.add(plot("stale", age_seconds=60))
 
     assert store.purge_expired() == 1
-    assert [item.data.name for item in store.list()] == ["fresh"]
+    assert [item.data.title for item in store.list()] == ["fresh"]
 
 
 def test_pinned_plots_do_not_expire():
@@ -75,7 +75,7 @@ def test_pinned_plots_do_not_expire():
     store.update(stale.id, PlotUpdate(pinned=True))
 
     assert store.purge_expired() == 0
-    assert [item.data.name for item in store.list()] == ["stale"]
+    assert [item.data.title for item in store.list()] == ["stale"]
 
     store.update(stale.id, PlotUpdate(pinned=False))
     assert store.purge_expired() == 1
@@ -90,8 +90,8 @@ def test_eviction_prefers_unpinned_plots():
     _, evicted = store.add(plot("c"))
 
     # "a" is oldest but pinned, so "b" is evicted in its place
-    assert [item.data.name for item in evicted] == ["b"]
-    assert {item.data.name for item in store.list()} == {"a", "c"}
+    assert [item.data.title for item in evicted] == ["b"]
+    assert {item.data.title for item in store.list()} == {"a", "c"}
 
 
 def test_eviction_falls_back_to_pinned_plots_once_all_are_pinned():
@@ -101,8 +101,8 @@ def test_eviction_falls_back_to_pinned_plots_once_all_are_pinned():
     _, evicted = store.add(plot("c", pinned=True))
 
     # max_plots is a hard cap: with every plot pinned, the oldest still goes
-    assert [item.data.name for item in evicted] == ["a"]
-    assert {item.data.name for item in store.list()} == {"b", "c"}
+    assert [item.data.title for item in evicted] == ["a"]
+    assert {item.data.title for item in store.list()} == {"b", "c"}
 
 
 def test_update_and_revision():
@@ -112,7 +112,7 @@ def test_update_and_revision():
 
     updated = store.update(stored.id, PlotUpdate(name="renamed", colour_index=11))
     assert updated is not None
-    assert updated.data.name == "renamed"
+    assert updated.data.title == "renamed"
     assert updated.colour_index == 11 % PALETTE_SLOTS
     assert store.revision > before
     assert store.update("not-a-plot", PlotUpdate(name="x")) is None
@@ -139,9 +139,9 @@ def test_clear():
 @pytest.mark.parametrize(
     "payload",
     [
-        {"name": "n", "x": [1.0], "y": [1.0, 2.0]},
-        {"name": "n", "x": [], "y": []},
-        {"name": "n", "x": [1.0], "y": [1.0], "e": [1.0, 2.0]},
+        {"title": "n", "x": [1.0], "y": [1.0, 2.0]},
+        {"title": "n", "x": [], "y": []},
+        {"title": "n", "x": [1.0], "y": [1.0], "e": [1.0, 2.0]},
     ],
 )
 def test_xyedata_validation(payload):

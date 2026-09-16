@@ -15,7 +15,7 @@ export interface SessionOption {
  * upstream of the sidebar's Type/File # facets (see App.tsx), rather than
  * another facet alongside them. Computed from whatever plots are actually
  * live, same as those facets: the picker only exists while at least one
- * plot has a resolvable session (see XYEData.get_instrument_session on the
+ * plot has a resolvable session (see DataPlot.get_instrument_session on the
  * server), and resets itself if the chosen session stops being live.
  */
 export function useInstrumentSessionFilter(plots: PlotSummary[]) {

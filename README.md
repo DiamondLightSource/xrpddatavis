@@ -5,7 +5,7 @@
 
 # xrpddatavis
 
-A deployable API that can be sent XYEData json messages via POST and then plotted via a web front end.
+A deployable API that can be sent DataPlot json messages via POST and then plotted via a web front end.
 
 POST a trace to `/plot` and it appears immediately in the browser at `/`: a table
 of every live plot on the left, an interactive Plotly canvas on the right, in the
@@ -46,40 +46,54 @@ cd frontend && npm install && npm run build && cd ..
 
 ## Try it with curl
 
-Post a bare `XYEData` document - `name`, `x` and `y` are the only required fields:
+Post a bare `DataPlot` document - `title`, `x` and `y` are the only required fields:
 
 ```bash
 curl -X POST http://localhost:8000/plot \
   -H 'Content-Type: application/json' \
   -d '{
-    "name": "quick-test",
+    "title": "quick-test",
     "x": [10.0, 10.1, 10.2, 10.3, 10.4],
     "y": [120, 340, 980, 310, 118]
   }'
 ```
 
-Post the full form - errors, a fit to overlay, provenance and axis labels:
+Post the full form - errors, provenance and axis labels:
 
 ```bash
 curl -X POST http://localhost:8000/plot \
   -H 'Content-Type: application/json' \
   -d '{
-    "data": {
-      "name": "si-standard",
-      "x": [28.0, 28.2, 28.4, 28.6, 28.8],
-      "y": [100, 850, 9000, 870, 120],
-      "e": [10, 29, 95, 30, 11],
-      "filepath": "/dls/i11/data/2026/cm12345-1/si-standard.xye",
-      "filenumber": 42,
-      "x_label": "2θ / °",
-      "y_label": "Intensity / counts"
-    },
-    "fit": {
-      "name": "si-standard · fit",
-      "x": [28.0, 28.2, 28.4, 28.6, 28.8],
-      "y": [105, 840, 8950, 880, 118]
-    },
+    "title": "si-standard",
+    "x": [28.0, 28.2, 28.4, 28.6, 28.8],
+    "y": [100, 850, 9000, 870, 120],
+    "e": [10, 29, 95, 30, 11],
+    "filepath": "/dls/i11/data/2026/cm12345-1/si-standard.xye",
+    "filenumber": 42,
+    "x_label": "2θ / °",
+    "y_label": "Intensity / counts",
     "plot_type": "line"
+  }'
+```
+
+Post a `FittedDataPlot` - it's a `DataPlot` with a `calc` curve sharing the same
+`x`, plus the `diff`, `background` and `markers` conventionally drawn alongside it
+in a Rietveld-style refinement plot (`diff` defaults to `y - calc` when omitted,
+and `background` may be one constant or a full array):
+
+```bash
+curl -X POST http://localhost:8000/plot \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "title": "si-standard",
+    "x": [28.0, 28.2, 28.4, 28.6, 28.8],
+    "y": [100, 850, 9000, 870, 120],
+    "e": [10, 29, 95, 30, 11],
+    "x_label": "2θ / °",
+    "y_label": "Intensity / counts",
+    "calc": [105, 840, 8950, 880, 118],
+    "background": 95.0,
+    "markers": [28.4]
   }'
 ```
 
@@ -91,15 +105,13 @@ generates. A tab only appears while at least one live plot uses it:
 curl -X POST http://localhost:8000/plot \
   -H 'Content-Type: application/json' \
   -d '{
-    "data": {
-      "name": "gr-001",
-      "x": [0.0, 0.5, 1.0, 1.5, 2.0],
-      "y": [0.0, 0.02, -0.05, 0.9, 0.1],
-      "filenumber": 1,
-      "data_type": "gr",
-      "x_label": "r / Å",
-      "y_label": "G(r)"
-    }
+    "title": "gr-001",
+    "x": [0.0, 0.5, 1.0, 1.5, 2.0],
+    "y": [0.0, 0.02, -0.05, 0.9, 0.1],
+    "filenumber": 1,
+    "data_type": "gr",
+    "x_label": "r / Å",
+    "y_label": "G(r)"
   }'
 ```
 
@@ -111,12 +123,10 @@ up in the title bar's session picker, which only appears once something needs it
 curl -X POST http://localhost:8000/plot \
   -H 'Content-Type: application/json' \
   -d '{
-    "data": {
-      "name": "sample-001",
-      "x": [10.0, 10.1, 10.2],
-      "y": [120.0, 340.0, 118.0],
-      "filepath": "/dls/i11/data/2026/cm12345-1/sample-001.xye"
-    }
+    "title": "sample-001",
+    "x": [10.0, 10.1, 10.2],
+    "y": [120.0, 340.0, 118.0],
+    "filepath": "/dls/i11/data/2026/cm12345-1/sample-001.xye"
   }'
 ```
 
@@ -131,7 +141,7 @@ y = [120 + 900 * math.exp(-(xi - 10) / 12)
      + sum(h * math.exp(-0.5 * ((xi - c) / 0.1) ** 2) for c, h in peaks)
      for xi in x]
 y = [random.gauss(v, v ** 0.5) for v in y]
-print(json.dumps({"name": "shell-pattern", "x": x, "y": y,
+print(json.dumps({"title": "shell-pattern", "x": x, "y": y,
                   "e": [v ** 0.5 for v in y], "x_label": "2θ / °"}))' \
 | curl -X POST http://localhost:8000/plot -H 'Content-Type: application/json' -d @-
 ```
@@ -173,7 +183,7 @@ the plot keeps its id, its colour and its place in the table:
 
 ```bash
 curl -X POST http://localhost:8000/plot -H 'Content-Type: application/json' \
-  -d '{"upsert": true, "data": {"name": "live-scan", "x": [1,2,3], "y": [4,9,2]}}'
+  -d '{"upsert": true, "title": "live-scan", "x": [1,2,3], "y": [4,9,2]}'
 ```
 
 ### Watch it work end to end
@@ -212,7 +222,7 @@ python examples/feed_demo.py --start-filenumber 100 --instrument-session mg30000
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `POST` | `/plot` | Accept an `XYEData` document (bare, or wrapped with `fit`/`plot_type`/`upsert`) |
+| `POST` | `/plot` | Accept a `DataPlot`, or a `FittedDataPlot` if it carries `calc` |
 | `GET` | `/liveplots` | Metadata for every live plot, plus `max_plots`, `ttl_seconds` and a `revision` |
 | `GET` | `/plot/{id}` | The full arrays for one plot |
 | `PATCH` | `/edit/{id}` | Change `name`, `plot_type`, `colour_index`, `data_type` or `pinned` |

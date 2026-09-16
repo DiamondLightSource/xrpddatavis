@@ -58,7 +58,14 @@ GR_SHELLS = [(2.3, 1.0), (3.4, 0.65), (4.6, 0.45), (5.9, 0.30), (7.0, 0.22)]
 
 
 def pxrd_pattern(rng, points=1500, scale=1.0, shift=0.0):
-    """A background plus pseudo-Voigt Bragg peaks with Poisson counting noise."""
+    """A background plus pseudo-Voigt Bragg peaks with Poisson counting noise.
+
+    Returns ``x, y, e, background, calc`` - the noise-free ``background`` and
+    ``background + signal`` curves are what a real Rietveld fit would
+    produce alongside the observed counts, so callers that want a
+    :class:`FittedDataPlot` example can use them directly instead of only
+    the ``(x, y, e)`` most callers need.
+    """
     x = np.linspace(10.0, 60.0, points)
     background = 120.0 + 900.0 * np.exp(-(x - 10.0) / 12.0)
     signal = np.zeros_like(x)
@@ -66,9 +73,9 @@ def pxrd_pattern(rng, points=1500, scale=1.0, shift=0.0):
         gauss = np.exp(-0.5 * ((x - centre - shift) / width) ** 2)
         lorentz = 1.0 / (1.0 + ((x - centre - shift) / width) ** 2)
         signal += height * 9000.0 * scale * (0.7 * gauss + 0.3 * lorentz)
-    clean = background + signal
-    noisy = rng.poisson(clean).astype(float)
-    return x, noisy, np.sqrt(np.maximum(noisy, 1.0))
+    calc = background + signal
+    noisy = rng.poisson(calc).astype(float)
+    return x, noisy, np.sqrt(np.maximum(noisy, 1.0)), background, calc
 
 
 def iq_pattern(rng, points=1500, scale=1.0, shift=0.0):
@@ -111,7 +118,11 @@ def gr_pattern(rng, points=1500, scale=1.0, shift=0.0):
 
 
 GENERATORS = {
-    "pxrd": pxrd_pattern,
+    # pxrd_pattern returns two extra arrays (background, calc) that the
+    # other generators don't have - drop them here so every entry in this
+    # dict has the same (x, y, e) contract; pxrd_pattern is called directly
+    # instead, in main(), whenever the extra Rietveld-style fit is wanted.
+    "pxrd": lambda *args, **kwargs: pxrd_pattern(*args, **kwargs)[:3],
     "iq": iq_pattern,
     "sq": sq_pattern,
     "fq": fq_pattern,
@@ -120,27 +131,46 @@ GENERATORS = {
 
 
 def payload(
-    name, x, y, e, filenumber, x_label, y_label, data_type, instrument_session, fit=None
+    title,
+    x,
+    y,
+    e,
+    filenumber,
+    x_label,
+    y_label,
+    data_type,
+    instrument_session,
+    fit=None,
 ) -> dict:
+    """Build a flat POST /plot body - a DataPlot, or a FittedDataPlot if
+    ``fit`` is given as a ``{"calc": ..., "diff": ..., "background": ...,
+    "markers": ...}`` dict (any of which may be omitted except ``calc``)."""
     ext = AXES[data_type][2]
     body = {
-        "data": {
-            "name": name,
-            "x": x.tolist(),
-            "y": y.tolist(),
-            "e": e.tolist(),
-            # a real Diamond-style path - the server pulls the instrument
-            # session out of this (see XYEData.get_instrument_session)
-            "filepath": f"/dls/i11/data/2026/{instrument_session}/{name}.{ext}",
-            "filenumber": filenumber,
-            "x_label": x_label,
-            "y_label": y_label,
-            "data_type": data_type,
-        },
+        "title": title,
+        "x": x.tolist(),
+        "y": y.tolist(),
+        "e": e.tolist(),
+        # a real Diamond-style path - the server pulls the instrument
+        # session out of this (see DataPlot.get_instrument_session)
+        "filepath": f"/dls/i11/data/2026/{instrument_session}/{title}.{ext}",
+        "filenumber": filenumber,
+        "x_label": x_label,
+        "y_label": y_label,
+        "data_type": data_type,
         "plot_type": "line",
     }
     if fit is not None:
-        body["fit"] = {"name": f"{name} · fit", "x": x.tolist(), "y": fit.tolist()}
+        body["calc"] = fit["calc"].tolist()
+        if "diff" in fit:
+            body["diff"] = fit["diff"].tolist()
+        if "background" in fit:
+            background = fit["background"]
+            body["background"] = (
+                background.tolist() if hasattr(background, "tolist") else background
+            )
+        if "markers" in fit:
+            body["markers"] = list(fit["markers"])
     return body
 
 
@@ -225,13 +255,25 @@ def main() -> None:
         filenumber = args.start_filenumber + scan
         for data_type in types:
             x_label, y_label, _ = AXES[data_type]
-            x, y, e = GENERATORS[data_type](
-                rng, points=args.points, scale=1.0 - 0.05 * scan, shift=0.02 * scan
-            )
+            shift = 0.02 * scan
             fit = None
             if data_type == "pxrd" and scan == 0:
-                kernel = np.ones(9) / 9
-                fit = np.convolve(y, kernel, mode="same")
+                # the first pxrd scan is posted as a FittedDataPlot: a toy
+                # Rietveld-style fit with calc, diff, background and the
+                # Bragg peak positions as reflection markers
+                x, y, e, background, calc = pxrd_pattern(
+                    rng, points=args.points, scale=1.0 - 0.05 * scan, shift=shift
+                )
+                fit = {
+                    "calc": calc,
+                    "diff": y - calc,
+                    "background": background,
+                    "markers": [centre + shift for centre, _, _ in PXRD_PEAKS],
+                }
+            else:
+                x, y, e = GENERATORS[data_type](
+                    rng, points=args.points, scale=1.0 - 0.05 * scan, shift=shift
+                )
             name = f"{data_type}-{filenumber:03d}"
             body = payload(
                 name,

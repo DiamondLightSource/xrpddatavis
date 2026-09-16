@@ -22,9 +22,9 @@ def client(config: Config):
         yield test_client
 
 
-def xye(name: str, points: int = 5, **extra) -> dict:
+def xye(title: str, points: int = 5, **extra) -> dict:
     return {
-        "name": name,
+        "title": title,
         "x": [float(i) for i in range(points)],
         "y": [float(i * i) for i in range(points)],
         **extra,

@@ -1,12 +1,16 @@
 import type { Data, Layout } from "plotly.js";
 import type { PlotData, PlotSummary } from "./api/types";
+import { backgroundSeries, difference, isFittedDataPlot } from "./api/types";
 import { DASHES, seriesColour } from "./palette";
 
 export type LayoutMode = "overlay" | "offset" | "grid";
 
 export interface ChartOptions {
   errors: boolean;
-  fits: boolean;
+  calc: boolean;
+  diff: boolean;
+  background: boolean;
+  markers: boolean;
   logy: boolean;
   normalise: boolean;
 }
@@ -18,19 +22,42 @@ interface Prepared {
   dash: (typeof DASHES)[number];
   mainY: number[];
   mainE: number[] | null;
-  fitY: number[] | null;
+  // undefined when this plot isn't a FittedDataPlot
+  calcY?: number[];
+  diffY?: number[];
+  backgroundY?: number[];
+  markerX?: number[];
 }
 
-function transform(y: number[], e: number[] | null, normalise: boolean) {
-  if (!normalise) return { y, e };
+/** Rescale `y` (and its errors) into [0, 1]. Returns the raw min/max too, so
+ * a fit's calc/background curves - which share the obs y-axis - can be
+ * rescaled the same way rather than independently against their own range. */
+function normaliseMain(y: number[], e: number[] | null) {
   const max = Math.max(...y);
   const min = Math.min(...y);
   const span = max - min;
-  if (span === 0) return { y: y.map(() => 0), e: e?.map(() => 0) ?? null };
+  if (span === 0) return { y: y.map(() => 0), e: e?.map(() => 0) ?? null, min, max };
   return {
     y: y.map((v) => (v - min) / span),
     e: e ? e.map((v) => v / span) : null,
+    min,
+    max,
   };
+}
+
+/** Rescale a curve that shares the obs y-axis (calc, background) using the
+ * obs curve's own min/max, so it stays aligned with it once normalised. */
+function rescaleLike(values: number[], min: number, max: number): number[] {
+  const span = max - min;
+  return span === 0 ? values.map(() => 0) : values.map((v) => (v - min) / span);
+}
+
+/** Rescale a curve that is itself an offset (diff) - divide by the span but
+ * don't subtract the min, since diff is centred on zero rather than on the
+ * obs curve's own scale. */
+function rescaleOffset(values: number[], min: number, max: number): number[] {
+  const span = max - min;
+  return span === 0 ? values.map(() => 0) : values.map((v) => v / span);
 }
 
 function prepare(
@@ -47,17 +74,34 @@ function prepare(
     const slot = summary.colour_index % 8;
     const repeat = seenSlot.get(slot) ?? 0;
     seenSlot.set(slot, repeat + 1);
-    const main = transform(plot.data.y, options.errors ? plot.data.e : null, options.normalise);
-    const fit = plot.fit ? transform(plot.fit.y, null, options.normalise) : null;
-    prepared.push({
+
+    const rawE = options.errors ? plot.data.e : null;
+    const main = options.normalise
+      ? normaliseMain(plot.data.y, rawE)
+      : { y: plot.data.y, e: rawE, min: Math.min(...plot.data.y), max: Math.max(...plot.data.y) };
+
+    const item: Prepared = {
       summary,
       plot,
       colour: seriesColour(slot, mode),
       dash: DASHES[repeat % DASHES.length],
       mainY: main.y,
       mainE: main.e,
-      fitY: fit?.y ?? null,
-    });
+    };
+
+    const data = plot.data;
+    if (isFittedDataPlot(data)) {
+      const rescale = (values: number[]) =>
+        options.normalise ? rescaleLike(values, main.min, main.max) : values;
+      item.calcY = rescale(data.calc);
+      const bg = backgroundSeries(data);
+      if (bg) item.backgroundY = rescale(bg);
+      const diffValues = difference(data);
+      item.diffY = options.normalise ? rescaleOffset(diffValues, main.min, main.max) : diffValues;
+      if (data.markers) item.markerX = data.markers;
+    }
+
+    prepared.push(item);
   }
   return prepared;
 }
@@ -115,6 +159,7 @@ export function buildChart(
     const axes = mode === "grid" ? { xaxis: `x${index + 1}`, yaxis: `y${index + 1}` } : {};
     const withErrors = options.errors && item.mainE !== null;
     const glyph = glyphType(item.plot.data.x.length, withErrors);
+    const legendgroup = item.summary.id;
 
     const trace: Data = {
       type: glyph,
@@ -126,7 +171,7 @@ export function buildChart(
       line: { color: item.colour, width: 2, dash: item.dash, shape: "linear" },
       marker: { color: item.colour, size: 5, line: { width: 0 } },
       hovertemplate: "%{customdata:.5g}<extra>%{fullData.name}</extra>",
-      legendgroup: item.summary.id,
+      legendgroup,
       ...axes,
       ...(withErrors
         ? {
@@ -143,17 +188,69 @@ export function buildChart(
     };
     traces.push(trace);
 
-    if (options.fits && item.plot.fit && item.fitY) {
+    // rows for diff and markers sit a fixed distance below the lowest point
+    // of the obs curve - a classic Rietveld-style difference plot, so a fit
+    // reads the same way whether or not the underlying values are normalised
+    const rowSpan = Math.max(...item.mainY) - Math.min(...item.mainY) || 1;
+    const rowGap = 0.15 * rowSpan;
+    const diffBase = Math.min(...item.mainY) - 3 * rowGap;
+
+    if (options.calc && item.calcY) {
       traces.push({
         type: glyph,
         mode: "lines",
-        name: item.plot.fit.name,
-        x: item.plot.fit.x,
-        y: shift(item.fitY),
-        customdata: item.plot.fit.y,
+        name: `${item.summary.name} · calc`,
+        x: item.plot.data.x,
+        y: shift(item.calcY),
         line: { color: item.colour, width: 2, dash: "dot" },
+        hovertemplate: "%{y:.5g}<extra>%{fullData.name}</extra>",
+        legendgroup,
+        ...axes,
+      });
+    }
+
+    if (options.background && item.backgroundY) {
+      traces.push({
+        type: glyph,
+        mode: "lines",
+        name: `${item.summary.name} · background`,
+        x: item.plot.data.x,
+        y: shift(item.backgroundY),
+        line: { color: item.colour, width: 1, dash: "longdash" },
+        opacity: 0.6,
+        hovertemplate: "%{y:.5g}<extra>%{fullData.name}</extra>",
+        legendgroup,
+        ...axes,
+      });
+    }
+
+    if (options.diff && item.diffY) {
+      traces.push({
+        type: glyph,
+        mode: "lines",
+        name: `${item.summary.name} · diff`,
+        x: item.plot.data.x,
+        y: shift(item.diffY.map((v) => v + diffBase)),
+        line: { color: item.colour, width: 1 },
+        opacity: 0.75,
         hovertemplate: "%{customdata:.5g}<extra>%{fullData.name}</extra>",
-        legendgroup: item.summary.id,
+        customdata: item.diffY,
+        legendgroup,
+        ...axes,
+      });
+    }
+
+    if (options.markers && item.markerX) {
+      const markerBase = diffBase - (options.diff ? 2 : 0) * rowGap;
+      traces.push({
+        type: "scatter",
+        mode: "markers",
+        name: `${item.summary.name} · markers`,
+        x: item.markerX,
+        y: shift(item.markerX.map(() => markerBase)),
+        marker: { color: item.colour, symbol: "line-ns-open", size: 10, line: { width: 1.5 } },
+        hovertemplate: "%{x:.5g}<extra>%{fullData.name}</extra>",
+        legendgroup,
         ...axes,
       });
     }

@@ -23,12 +23,12 @@ import {
   type ParsedTable,
 } from "../uploadParser";
 import { fmtNumber } from "../format";
-import type { XYEDataInput } from "../api/types";
+import type { PlotRequest } from "../api/types";
 
 interface UploadDialogProps {
   open: boolean;
   onClose: () => void;
-  onSubmit: (data: XYEDataInput) => Promise<void>;
+  onSubmit: (data: PlotRequest) => Promise<void>;
 }
 
 const DELIMITERS: { value: DelimiterChoice; label: string }[] = [
@@ -165,7 +165,7 @@ export function UploadDialog({ open, onClose, onSubmit }: UploadDialogProps) {
     try {
       const parsedFilenumber = filenumber.trim() === "" ? null : Number(filenumber);
       await onSubmit({
-        name: name.trim() || "uploaded",
+        title: name.trim() || "uploaded",
         x: parsed.rows.map((row) => row[xCol]),
         y: parsed.rows.map((row) => row[yCol]),
         e: eCol !== null ? parsed.rows.map((row) => row[eCol]) : null,

@@ -1,9 +1,10 @@
 import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 from uuid import UUID, uuid4
 
+import numpy as np
 from pydantic import BaseModel, Field, model_validator
 
 PLOT_TYPES = Literal["scatter", "line", "line+markers"]
@@ -68,19 +69,10 @@ def get_instrument_session(filepath: str) -> str:
 class XYEData(BaseModel):
     """A single 1D trace: x, y and optional y errors."""
 
-    name: str
+    title: str
     x: list[float]
     y: list[float]
     e: list[float] | None = None
-    filepath: str | None = None
-    filenumber: int | None = None
-    # explicit override for get_instrument_session() - usually left unset and
-    # derived from filepath instead
-    instrument_session: str | None = None
-    # axis labels for the frontend, e.g. "2θ / °" and "Intensity / counts"
-    x_label: str | None = None
-    y_label: str | None = None
-    data_type: DATA_TYPES | str | None = None
 
     @model_validator(mode="after")
     def _check_lengths(self) -> Self:
@@ -95,6 +87,28 @@ class XYEData(BaseModel):
                 f"e must be the same length as x (got {len(self.e)} and {len(self.x)})"
             )
         return self
+
+
+class DataPlot(XYEData):
+    """An :class:`XYEData` trace plus everything needed to plot and locate it.
+
+    This is what actually gets drawn - as opposed to ``XYEData``, which is
+    just the numbers.
+    """
+
+    filepath: str | None = None
+    filenumber: int | None = None
+    # explicit override for get_instrument_session() - usually left unset and
+    # derived from filepath instead
+    instrument_session: str | None = None
+    # axis labels for the frontend, e.g. "2θ / °" and "Intensity / counts"
+    x_label: str | None = None
+    y_label: str | None = None
+    data_type: DATA_TYPES | str | None = None
+    plot_type: PLOT_TYPES = Field(default="line")
+    # replace an existing plot that has the same title rather than adding a
+    # new one - useful for live scans that push repeated updates of one trace
+    upsert: bool = False
 
     def get_instrument_session(self) -> str | None:
         """Return instrument session if its not none, otherwise
@@ -113,19 +127,37 @@ class XYEData(BaseModel):
         return None
 
 
-class PlotRequest(BaseModel):
-    """Body of a POST to ``/plot``.
+class FittedDataPlot(DataPlot):
+    """A :class:`DataPlot` with a fit: a calculated curve sharing ``x`` with
+    the observed data, plus the difference, background and reflection-marker
+    curves conventionally drawn alongside it (as in a Rietveld refinement
+    plot)."""
 
-    ``data`` may also be posted bare - i.e. an :class:`XYEData` document at the
-    top level - in which case the defaults below apply.
-    """
+    calc: list[float]
+    diff: list[float] | None = None
+    background: list[float] | float | None = None
+    markers: list[float] | None = None
 
-    data: XYEData
-    fit: XYEData | None = None
-    plot_type: PLOT_TYPES = Field(default="line")
-    # replace an existing plot that has the same name rather than adding a new
-    # one - useful for live scans that push repeated updates of one trace
-    upsert: bool = False
+    @property
+    def obs(self):
+        return self.y
+
+    @property
+    def difference(self) -> list[float]:
+        """returns obs-calc"""
+        if self.diff is not None:
+            return self.diff
+        else:
+            difference = np.array(self.y) - np.array(self.calc)
+            return difference.tolist()
+
+
+# Body of a POST to ``/plot``: a single flat document, either a plain
+# DataPlot or (if it carries ``calc``) a FittedDataPlot. ``union_mode`` is
+# pinned to try FittedDataPlot first - otherwise DataPlot, which ignores
+# unknown fields, would silently swallow ``calc``/``diff``/etc and parse
+# every fitted document as an unfitted one.
+PlotRequest = Annotated[FittedDataPlot | DataPlot, Field(union_mode="left_to_right")]
 
 
 class PlotResponse(BaseModel):
@@ -150,9 +182,7 @@ class PlotUpdate(BaseModel):
 
 
 class PlotData(BaseModel):
-    data: XYEData
-    fit: XYEData | None = None
-    plot_type: PLOT_TYPES = Field(default="line")
+    data: Annotated[FittedDataPlot | DataPlot, Field(union_mode="left_to_right")]
     id: UUID = Field(default_factory=uuid4)
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)
@@ -183,8 +213,8 @@ class PlotData(BaseModel):
         age = self.age_seconds(now)
         return PlotSummary(
             id=self.id,
-            name=self.data.name,
-            plot_type=self.plot_type,
+            name=self.data.title,
+            plot_type=self.data.plot_type,
             data_type=self.data.data_type,
             points=len(self.data.x),
             x_min=min(self.data.x),
@@ -192,7 +222,7 @@ class PlotData(BaseModel):
             y_min=min(self.data.y),
             y_max=max(self.data.y),
             has_errors=self.data.e is not None,
-            has_fit=self.fit is not None,
+            has_fit=isinstance(self.data, FittedDataPlot),
             filepath=self.data.filepath,
             filenumber=self.data.filenumber,
             instrument_session=self.data.get_instrument_session(),

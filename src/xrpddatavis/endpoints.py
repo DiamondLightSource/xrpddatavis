@@ -2,7 +2,7 @@ HEALTH_ROUTE = "/healthz"
 INFO = "/info"  # GET static app metadata (e.g. beamline) for the UI title bar
 
 # --- data in -----------------------------------------------------------------
-PLOT = "/plot"  # POST an XYEData (or PlotRequest) document
+PLOT = "/plot"  # POST a DataPlot (or FittedDataPlot) document
 
 # --- data out ----------------------------------------------------------------
 LIVEPLOTS = "/liveplots"  # GET metadata for every live plot

@@ -33,7 +33,6 @@ from xrpddatavis.models import (
     PlotResponse,
     PlotSummary,
     PlotUpdate,
-    XYEData,
 )
 from xrpddatavis.store import ResultStore
 
@@ -77,36 +76,31 @@ async def info(request: Request) -> dict[str, str]:
 @ROUTER.post(PLOT, tags=["plots"], status_code=201)
 async def plot(
     request: Request,
-    body: PlotRequest | XYEData = Body(
+    body: PlotRequest = Body(
         ...,
         openapi_examples={
             "bare": {
-                "summary": "A bare XYEData document",
+                "summary": "A plain DataPlot document",
                 "value": {
-                    "name": "sample-001",
+                    "title": "sample-001",
                     "x": [10.0, 10.1, 10.2],
                     "y": [120.0, 340.0, 118.0],
                 },
             },
             "with_fit": {
-                "summary": "Data plus a fit and an explicit plot type",
+                "summary": "A FittedDataPlot - calc shares x with the observed data",
                 "value": {
-                    "data": {
-                        "name": "sample-001",
-                        "x": [10.0, 10.1, 10.2],
-                        "y": [120.0, 340.0, 118.0],
-                        "e": [11.0, 18.4, 10.9],
-                        "filepath": "/dls/i11/data/sample-001.xye",
-                        "filenumber": 1,
-                        "data_type": "pxrd",
-                    },
-                    "fit": {
-                        "name": "sample-001 fit",
-                        "x": [10.0, 10.1, 10.2],
-                        "y": [119.0, 341.0, 119.0],
-                    },
+                    "title": "sample-001",
+                    "x": [10.0, 10.1, 10.2],
+                    "y": [120.0, 340.0, 118.0],
+                    "e": [11.0, 18.4, 10.9],
+                    "filepath": "/dls/i11/data/sample-001.xye",
+                    "filenumber": 1,
+                    "data_type": "pxrd",
                     "plot_type": "line",
-                    "upsert": False,
+                    "calc": [119.0, 341.0, 119.0],
+                    "background": 110.0,
+                    "markers": [10.05, 10.15],
                 },
             },
         },
@@ -116,37 +110,30 @@ async def plot(
     store = get_store(request)
     config = get_config(request)
 
-    payload = body if isinstance(body, PlotRequest) else PlotRequest(data=body)
+    if len(body.x) > config.plots.max_points:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"'{body.title}' has {len(body.x)} points, "
+                f"which exceeds plots.max_points={config.plots.max_points}"
+            ),
+        )
 
-    for trace in (payload.data, payload.fit):
-        if trace is not None and len(trace.x) > config.plots.max_points:
-            raise HTTPException(
-                status_code=413,
-                detail=(
-                    f"'{trace.name}' has {len(trace.x)} points, "
-                    f"which exceeds plots.max_points={config.plots.max_points}"
-                ),
-            )
-
-    stored = PlotData(
-        data=payload.data,
-        fit=payload.fit,
-        plot_type=payload.plot_type,
-    )
-    if payload.upsert:
+    stored = PlotData(data=body)
+    if body.upsert:
         stored, evicted = store.upsert(stored)
     else:
         stored, evicted = store.add(stored)
 
     logger.info(
         "plotted '%s' (%d points) as %s",
-        stored.data.name,
+        stored.data.title,
         len(stored.data.x),
         stored.id,
     )
 
     return PlotResponse(
-        name=stored.data.name,
+        name=stored.data.title,
         plotted=True,
         id=stored.id,
         expires_at=stored.expires_at(store.ttl_seconds),
@@ -190,7 +177,7 @@ async def remove_plot(request: Request, id: str) -> dict[str, str]:
     removed = get_store(request).remove(id)
     if removed is None:
         raise HTTPException(status_code=404, detail=f"No plot with id {id}")
-    return {"removed": str(removed.id), "name": removed.data.name}
+    return {"removed": str(removed.id), "name": removed.data.title}
 
 
 @ROUTER.delete(CLEAR_PLOTS, tags=["plots"])
@@ -285,7 +272,7 @@ def start_api(config: Config | None = None) -> FastAPI:
         title=xrpddatavis.__name__.capitalize(),
         version=__version__,
         description=(
-            "Post XYEData documents to /plot and watch them appear on the "
+            "Post DataPlot documents to /plot and watch them appear on the "
             "web frontend served at /."
         ),
         lifespan=lifespan,

@@ -29,7 +29,7 @@ import diamondLogoLight from "./assets/diamond-logo-light.svg";
 import diamondLogoDark from "./assets/diamond-logo-dark.svg";
 import { ICON_SM } from "./iconSizes";
 import { api, ApiError } from "./api/client";
-import type { XYEDataInput } from "./api/types";
+import type { PlotRequest } from "./api/types";
 import { useLivePlots } from "./hooks/useLivePlots";
 import { useSelection } from "./hooks/useSelection";
 import { useFacets } from "./hooks/useFacets";
@@ -46,7 +46,15 @@ import { ChartPanel } from "./components/ChartPanel";
 import { UploadDialog } from "./components/UploadDialog";
 import type { ChartOptions, LayoutMode } from "./chartBuilder";
 
-const DEFAULT_OPTIONS: ChartOptions = { errors: true, fits: true, logy: false, normalise: false };
+const DEFAULT_OPTIONS: ChartOptions = {
+  errors: true,
+  calc: true,
+  diff: false,
+  background: false,
+  markers: false,
+  logy: false,
+  normalise: false,
+};
 
 export default function App() {
   const { plots, limits, connection, error: liveError, updatedAt, refresh } = useLivePlots();
@@ -116,10 +124,10 @@ export default function App() {
     void withErrorToast(() => api.clearAll(), "Clear");
   };
 
-  const handleUpload = async (data: XYEDataInput) => {
-    const response = await api.post({ data });
+  const handleUpload = async (data: PlotRequest) => {
+    const response = await api.post(data);
     await refresh();
-    notify(`Plotted "${data.name}" (${data.x.length} points).`, "success");
+    notify(`Plotted "${data.title}" (${data.x.length} points).`, "success");
     if (response.id) selectMany([response.id]);
   };
 
@@ -286,7 +294,7 @@ export default function App() {
             onCycleColour={handleCycleColour}
             onRename={handleRename}
             ttlSeconds={limits.ttl_seconds}
-            emptyMessage={plots.length ? "No plots match the current filters." : "No plots yet — POST XYEData to /plot."}
+            emptyMessage={plots.length ? "No plots match the current filters." : "No plots yet — POST a DataPlot to /plot."}
           />
 
           <Stack

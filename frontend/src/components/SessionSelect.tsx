@@ -10,7 +10,7 @@ interface SessionSelectProps {
 
 /** The instrument-session picker next to the logo/name/beamline - only
  * rendered at all once at least one live plot has a resolvable session
- * (see XYEData.get_instrument_session on the server). Session IDs are
+ * (see DataPlot.get_instrument_session on the server). Session IDs are
  * technical identifiers, so - like the beamline chip - they're set in mono;
  * the "All sessions" option is plain prose and stays in Inter. */
 export function SessionSelect({ options, value, onChange }: SessionSelectProps) {
