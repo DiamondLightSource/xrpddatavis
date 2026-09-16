@@ -103,7 +103,7 @@ class DataPlot(XYEData):
     instrument_session: str | None = None
     # axis labels for the frontend, e.g. "2θ / °" and "Intensity / counts"
     x_label: str | None = None
-    y_label: str | None = None
+    y_label: str | None = "Intensity (Arb. Units)"
     data_type: DATA_TYPES | str | None = None
     plot_type: PLOT_TYPES = Field(default="line")
     # replace an existing plot that has the same title rather than adding a
