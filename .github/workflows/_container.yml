@@ -66,6 +66,12 @@ jobs:
       - name: Install Helm
         uses: Azure/setup-helm@v4.3.1
         id: install
+        with:
+          # Helm >v3.18.6 regressed OCI push to ghcr.io with
+          # `failed to perform "Tag" on destination: ...: not found`
+          # (helm/helm#31223) - pin to the last known-good release until
+          # upstream ships a fix.
+          version: v3.18.6
 
       - name: Helm login to GHCR
         if: inputs.publish && github.ref_type == 'tag'
