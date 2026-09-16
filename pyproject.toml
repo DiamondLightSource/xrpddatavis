@@ -55,6 +55,12 @@ name = "Richard Dixey"
 
 [tool.setuptools_scm]
 version_file = "src/xrpddatavis/_version.py"
+# .dockerignore excludes .git from the Docker build context, and the repo
+# has no tags, so setuptools_scm can never detect a version there - fall
+# back instead of erroring (see also the setuptools_scm/vcs-versioning
+# incompatibility this sidesteps: pypa/setuptools-scm's `tool=` call to
+# `_version_missing` breaks against vcs-versioning>=2.4).
+fallback_version = "0.0.0"
 
 [tool.setuptools.package-data]
 # the built web frontend (frontend/, built by Vite into here) ships inside
