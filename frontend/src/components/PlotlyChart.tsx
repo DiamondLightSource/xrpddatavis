@@ -36,7 +36,13 @@ export const PlotlyChart = forwardRef<PlotlyChartHandle, PlotlyChartProps>(
         const Plotly = window.Plotly;
         const node = containerRef.current;
         if (!Plotly || !node) return;
-        void Plotly.relayout(node, { "xaxis.autorange": true, "yaxis.autorange": true });
+        const gd = node as unknown as { layout?: Record<string, unknown> };
+        const axisKeys = Object.keys(gd.layout ?? {}).filter((key) => /^[xy]axis\d*$/.test(key));
+        const update: Record<string, boolean> = {};
+        for (const key of axisKeys.length ? axisKeys : ["xaxis", "yaxis"]) {
+          update[`${key}.autorange`] = true;
+        }
+        void Plotly.relayout(node, update);
       },
       resize: () => {
         const Plotly = window.Plotly;
