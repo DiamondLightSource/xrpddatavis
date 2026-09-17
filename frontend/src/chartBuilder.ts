@@ -274,6 +274,13 @@ function axisStyle(
   };
 }
 
+/** Join the distinct labels across all plotted series, in first-seen order,
+ * so an axis shown by several units (e.g. overlay/offset) states all of them
+ * instead of silently taking on whichever plot happened to load first. */
+function combineLabels(labels: string[]): string {
+  return Array.from(new Set(labels)).join(" / ");
+}
+
 function buildLayout(
   prepared: Prepared[],
   traceCount: number,
@@ -289,9 +296,8 @@ function buildLayout(
     fontFamily: string;
   },
 ): Partial<Layout> {
-  const first = prepared[0]?.plot.data;
-  const xTitle = first?.x_label || "x";
-  const yBase = first?.y_label || "Intensity";
+  const xTitle = combineLabels(prepared.map((p) => p.plot.data.x_label || "x")) || "x";
+  const yBase = combineLabels(prepared.map((p) => p.plot.data.y_label || "Intensity")) || "Intensity";
   const yTitle = options.normalise ? `${yBase} (normalised)` : yBase;
 
   const base: Partial<Layout> = {
@@ -340,14 +346,17 @@ function buildLayout(
         font: { color: item.colour, size: 11 },
       })),
       ...Object.fromEntries(
-        prepared.flatMap((_, index) => {
+        prepared.flatMap((item, index) => {
           const n = index + 1;
+          const itemXTitle = item.plot.data.x_label || "x";
+          const itemYBase = item.plot.data.y_label || "Intensity";
+          const itemYTitle = options.normalise ? `${itemYBase} (normalised)` : itemYBase;
           return [
             [
               `xaxis${n}`,
               axisStyle(themeColours, {
                 title: {
-                  text: index >= count - columns ? xTitle : "",
+                  text: itemXTitle,
                   font: { color: themeColours.textSecondary, size: 11 },
                 },
               }),
@@ -357,7 +366,7 @@ function buildLayout(
               axisStyle(themeColours, {
                 type: options.logy ? "log" : "linear",
                 title: {
-                  text: index % columns === 0 ? yTitle : "",
+                  text: itemYTitle,
                   font: { color: themeColours.textSecondary, size: 11 },
                 },
               }),
