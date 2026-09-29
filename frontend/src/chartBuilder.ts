@@ -60,6 +60,33 @@ function rescaleOffset(values: number[], min: number, max: number): number[] {
   return span === 0 ? values.map(() => 0) : values.map((v) => v / span);
 }
 
+/** The value at fraction `q` (0-1) through the sorted `values`. */
+function quantile(values: number[], q: number): number {
+  const sorted = values.filter(Number.isFinite).sort((a, b) => a - b);
+  if (sorted.length === 0) return 0;
+  return sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))];
+}
+
+/** Baselines for the diff and marker rows under an obs curve, as in a
+ * Rietveld-style plot. Spacing is taken from robust measures rather than the
+ * full obs span, so one very intense peak doesn't push the rows far below
+ * zero and out of view when zoomed in on the weak peaks:
+ * - the gap scales with the obs span up to its 99th percentile, which ignores
+ *   the few points that make up a sharp, intense peak;
+ * - the diff row is dropped just far enough for its typical excursion (99th
+ *   percentile of |diff|) to clear the obs curve, rather than a fixed amount.
+ * A large misfit spike at a strong peak may still overlap the obs curve,
+ * which is preferable to shrinking everything else to fit it. */
+function fitRowBaselines(mainY: number[], diffY: number[] | undefined, showDiff: boolean) {
+  const obsMin = Math.min(...mainY);
+  const robustSpan = quantile(mainY, 0.99) - obsMin || Math.max(...mainY) - obsMin || 1;
+  const pad = 0.06 * robustSpan;
+  const diffHalf = showDiff && diffY ? quantile(diffY.map(Math.abs), 0.99) : 0;
+  const diffBase = obsMin - pad - diffHalf;
+  const markerBase = (showDiff && diffY ? diffBase - diffHalf : obsMin) - 1.5 * pad;
+  return { diffBase, markerBase };
+}
+
 function prepare(
   summaries: PlotSummary[],
   getData: (id: string) => PlotData | undefined,
@@ -188,12 +215,9 @@ export function buildChart(
     };
     traces.push(trace);
 
-    // rows for diff and markers sit a fixed distance below the lowest point
-    // of the obs curve - a classic Rietveld-style difference plot, so a fit
-    // reads the same way whether or not the underlying values are normalised
-    const rowSpan = Math.max(...item.mainY) - Math.min(...item.mainY) || 1;
-    const rowGap = 0.15 * rowSpan;
-    const diffBase = Math.min(...item.mainY) - 3 * rowGap;
+    // rows for diff and markers sit just below the lowest point of the obs
+    // curve - a classic Rietveld-style difference plot
+    const { diffBase, markerBase } = fitRowBaselines(item.mainY, item.diffY, options.diff);
 
     if (options.calc && item.calcY) {
       traces.push({
@@ -241,7 +265,6 @@ export function buildChart(
     }
 
     if (options.markers && item.markerX) {
-      const markerBase = diffBase - (options.diff ? 2 : 0) * rowGap;
       traces.push({
         type: "scatter",
         mode: "markers",
