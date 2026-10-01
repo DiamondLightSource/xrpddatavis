@@ -46,7 +46,7 @@ RUN helm plugin install https://github.com/losisin/helm-values-schema-json.git -
 # Builds the React/TypeScript frontend (see frontend/readme.md) into
 # src/xrpddatavis/static, the same place the Python package expects it -
 # see src/xrpddatavis/server.py and frontend/vite.config.ts.
-FROM node:20-slim AS frontend-build
+FROM node:24-slim AS frontend-build
 
 WORKDIR /repo/frontend
 COPY frontend/package.json frontend/package-lock.json ./
