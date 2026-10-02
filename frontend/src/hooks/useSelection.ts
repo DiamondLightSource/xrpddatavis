@@ -35,7 +35,15 @@ export function useSelection(liveIds: string[]) {
     [setSelected],
   );
 
+  const deselectMany = useCallback(
+    (ids: string[]) => {
+      const drop = new Set(ids);
+      setSelected((prev) => prev.filter((id) => !drop.has(id)));
+    },
+    [setSelected],
+  );
+
   const clear = useCallback(() => setSelected([]), [setSelected]);
 
-  return { selected, toggle, selectMany, clear };
+  return { selected, toggle, selectMany, deselectMany, clear };
 }

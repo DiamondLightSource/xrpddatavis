@@ -1,20 +1,27 @@
-import { useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Alert,
   Box,
   Checkbox,
+  CircularProgress,
   FormControlLabel,
+  FormGroup,
+  IconButton,
+  ListItemIcon,
+  ListItemText,
+  MenuItem,
   Stack,
-  ToggleButton,
-  ToggleButtonGroup,
+  TextField,
+  Tooltip,
   Typography,
-  Button,
   useTheme,
 } from "@mui/material";
-import { RotateCcw } from "lucide-react";
+import { Layers, LayoutGrid, RotateCcw, Rows3, type LucideIcon } from "lucide-react";
 import { useColorScheme } from "@mui/material/styles";
 import type { PlotSummary } from "../api/types";
 import { buildChart, type ChartOptions, type LayoutMode } from "../chartBuilder";
-import { ICON_SM } from "../iconSizes";
+import { ICON_SM, ICON_XS } from "../iconSizes";
+import { resolveColour } from "../resolveColour";
 import { PlotlyChart, type PlotlyChartHandle } from "./PlotlyChart";
 import { usePlotDataCache } from "../hooks/usePlotDataCache";
 
@@ -27,11 +34,37 @@ interface ChartPanelProps {
   onOptionsChange: (options: ChartOptions) => void;
 }
 
-const MODE_LABELS: { value: LayoutMode; label: string; hint: string }[] = [
-  { value: "overlay", label: "Overlay", hint: "All traces on one pair of axes" },
-  { value: "offset", label: "Offset", hint: "Overlay with a vertical offset per trace (waterfall)" },
-  { value: "grid", label: "Grid", hint: "One panel per trace" },
+const MODE_OPTIONS: { value: LayoutMode; label: string; hint: string; Icon: LucideIcon }[] = [
+  { value: "overlay", label: "Overlay", hint: "All traces on one pair of axes", Icon: Layers },
+  { value: "offset", label: "Offset", hint: "Vertical offset per trace (waterfall)", Icon: Rows3 },
+  { value: "grid", label: "Grid", hint: "One panel per trace", Icon: LayoutGrid },
 ];
+
+type OptionKey = keyof ChartOptions;
+
+const TRACE_OPTIONS: { key: OptionKey; label: string }[] = [
+  { key: "errors", label: "Error bars" },
+  { key: "calc", label: "Calc" },
+  { key: "diff", label: "Diff" },
+  { key: "background", label: "Background" },
+  { key: "markers", label: "Markers" },
+];
+
+const SCALE_OPTIONS: { key: OptionKey; label: string }[] = [
+  { key: "logy", label: "Log y" },
+  { key: "normalise", label: "Normalise" },
+];
+
+function ToolbarGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <Stack direction="row" spacing={1} alignItems="center">
+      <Typography variant="overline" sx={{ color: "text.muted" }}>
+        {label}
+      </Typography>
+      {children}
+    </Stack>
+  );
+}
 
 export function ChartPanel({
   selectedSummaries,
@@ -42,12 +75,12 @@ export function ChartPanel({
   onOptionsChange,
 }: ChartPanelProps) {
   const theme = useTheme();
-  const { mode: schemeMode, systemMode } = useColorScheme();
-  const colourMode = (schemeMode === "system" ? systemMode : schemeMode) === "dark" ? "dark" : "light";
+  const { colorScheme } = useColorScheme();
+  const colourMode = colorScheme === "dark" ? "dark" : "light";
   const chartRef = useRef<PlotlyChartHandle>(null);
   const { get: getPlotData, loadError } = usePlotDataCache(selectedSummaries);
 
-  const themeColours = useMemo(
+  const rawColours = useMemo(
     () => ({
       border: theme.palette.divider,
       borderStrong: theme.palette.border.strong,
@@ -55,10 +88,33 @@ export function ChartPanel({
       textSecondary: theme.palette.text.secondary,
       textMuted: theme.palette.text.muted ?? theme.palette.text.secondary,
       surface: theme.palette.background.paper,
-      fontFamily: theme.typography.fontFamily ?? "sans-serif",
     }),
     [theme],
   );
+
+  const resolveAll = useCallback(
+    () => ({
+      border: resolveColour(rawColours.border),
+      borderStrong: resolveColour(rawColours.borderStrong),
+      textPrimary: resolveColour(rawColours.textPrimary),
+      textSecondary: resolveColour(rawColours.textSecondary),
+      textMuted: resolveColour(rawColours.textMuted),
+      surface: resolveColour(rawColours.surface),
+      fontFamily: theme.typography.fontFamily ?? "sans-serif",
+    }),
+    [rawColours, theme.typography.fontFamily],
+  );
+
+  const [themeColours, setThemeColours] = useState(resolveAll);
+
+  // The data-mode attribute flips after React renders the new colour scheme, so
+  // re-resolve when it changes instead of trusting the render that saw it.
+  useEffect(() => {
+    setThemeColours(resolveAll());
+    const observer = new MutationObserver(() => setThemeColours(resolveAll()));
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-mode"] });
+    return () => observer.disconnect();
+  }, [resolveAll, colorScheme]);
 
   // Not memoized: `getPlotData` reads from a ref-backed cache that fills in
   // asynchronously (usePlotDataCache), so its *identity* never changes even
@@ -91,9 +147,18 @@ export function ChartPanel({
     );
   } else if (!drawable) {
     overlay = (
-      <Typography variant="subtitle1" sx={{ color: "text.secondary" }}>
-        {loadError ? "Could not load the selected plots" : "Loading…"}
-      </Typography>
+      loadError ? (
+        <Alert severity="error">
+          Could not load the selected plots - they may have expired. Reselect them from the list.
+        </Alert>
+      ) : (
+        <Stack direction="row" spacing={1.5} alignItems="center" role="status">
+          <CircularProgress size={20} />
+          <Typography variant="body2" sx={{ color: "text.secondary" }}>
+            Loading selected plots
+          </Typography>
+        </Stack>
+      )
     );
   }
 
@@ -101,72 +166,89 @@ export function ChartPanel({
     <Box sx={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
       <Stack
         direction="row"
-        spacing={3}
-        alignItems="center"
+        role="group"
+        aria-label="Chart options"
         useFlexGap
         sx={{
           flexWrap: "wrap",
+          alignItems: "center",
+          columnGap: 3,
+          rowGap: 1,
           px: 1.5,
           py: 1,
           borderBottom: 1,
           borderColor: "divider",
+          backgroundColor: "surface.subtle",
         }}
       >
-        <Stack direction="row" spacing={1} alignItems="center">
-          <Typography variant="overline" sx={{ color: "text.muted" }}>
-            Layout
-          </Typography>
-          <ToggleButtonGroup
-            size="small"
-            exclusive
-            value={mode}
-            onChange={(_, next: LayoutMode | null) => next && onModeChange(next)}
-            aria-label="Plot layout"
-          >
-            {MODE_LABELS.map((m) => (
-              <ToggleButton key={m.value} value={m.value} title={m.hint} sx={{ textTransform: "none", px: 1.5 }}>
-                {m.label}
-              </ToggleButton>
-            ))}
-          </ToggleButtonGroup>
-        </Stack>
-
-        <Stack direction="row" spacing={1} flexWrap="wrap">
-          {(
-            [
-              ["errors", "Error bars"],
-              ["calc", "Calc"],
-              ["diff", "Diff"],
-              ["background", "Background"],
-              ["markers", "Markers"],
-              ["logy", "Log y"],
-              ["normalise", "Normalise"],
-            ] as const
-          ).map(([key, label]) => (
-            <FormControlLabel
-              key={key}
-              control={
-                <Checkbox
-                  size="small"
-                  checked={options[key]}
-                  onChange={(e) => onOptionsChange({ ...options, [key]: e.target.checked })}
+        {(
+          [
+            ["Traces", "Trace options", TRACE_OPTIONS],
+            ["Scale", "Scale options", SCALE_OPTIONS],
+          ] as const
+        ).map(([label, ariaLabel, group]) => (
+          <ToolbarGroup key={label} label={label}>
+            <FormGroup row role="group" aria-label={ariaLabel} sx={{ columnGap: 1.5 }}>
+              {group.map((o) => (
+                <FormControlLabel
+                  key={o.key}
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={options[o.key]}
+                      onChange={(e) => onOptionsChange({ ...options, [o.key]: e.target.checked })}
+                    />
+                  }
+                  label={o.label}
+                  slotProps={{ typography: { variant: "body2" } }}
+                  sx={{ mr: 0 }}
                 />
-              }
-              label={label}
-              sx={{ mr: 0, "& .MuiFormControlLabel-label": { fontSize: 13 } }}
-            />
-          ))}
-        </Stack>
+              ))}
+            </FormGroup>
+          </ToolbarGroup>
+        ))}
 
-        <Button
-          size="small"
-          variant="outlined"
-          startIcon={<RotateCcw {...ICON_SM} />}
-          onClick={() => chartRef.current?.resetView()}
-          sx={{ textTransform: "none" }}
-        >
-          Reset view
-        </Button>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ ml: "auto" }}>
+          <TextField
+            select
+            size="small"
+            value={mode}
+            onChange={(e) => onModeChange(e.target.value as LayoutMode)}
+            sx={{ minWidth: 112, "& .MuiSelect-select": { py: 0.5 } }}
+            slotProps={{
+              select: {
+                SelectDisplayProps: { "aria-label": "Plot layout" },
+                renderValue: (v) => {
+                  const m = MODE_OPTIONS.find((o) => o.value === v);
+                  return m ? (
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <m.Icon {...ICON_XS} aria-hidden />
+                      <span>{m.label}</span>
+                    </Stack>
+                  ) : null;
+                },
+              },
+            }}
+          >
+            {MODE_OPTIONS.map((m) => (
+              <MenuItem key={m.value} value={m.value} dense>
+                <Tooltip title={m.hint} placement="left">
+                  <Box sx={{ display: "flex", alignItems: "center", width: "100%" }}>
+                    <ListItemIcon>
+                      <m.Icon {...ICON_XS} />
+                    </ListItemIcon>
+                    <ListItemText primary={m.label} />
+                  </Box>
+                </Tooltip>
+              </MenuItem>
+            ))}
+          </TextField>
+          <Tooltip title="Reset view">
+            <IconButton size="small" aria-label="Reset view" onClick={() => chartRef.current?.resetView()}>
+              <RotateCcw {...ICON_SM} />
+            </IconButton>
+          </Tooltip>
+        </Stack>
       </Stack>
 
       <Box sx={{ flex: 1, minHeight: 0, position: "relative", backgroundColor: "background.paper" }}>
