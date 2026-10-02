@@ -30,6 +30,8 @@ import { useColorScheme } from "@mui/material/styles";
 
 const FIRST_LINE = 28;
 
+const ttlCellPadding = { pl: 0.5, pr: 1.5 } as const;
+
 const firstLine = {
   display: "flex",
   alignItems: "center",
@@ -92,7 +94,7 @@ function sortPlots(plots: PlotSummary[], sort: { key: SortKey; dir: "asc" | "des
 function TtlCell({ plot, ttlSeconds }: { plot: PlotSummary; ttlSeconds: number }) {
   if (plot.pinned) {
     return (
-      <Typography variant="mono3" fontWeight={600} sx={{ ...firstLine, color: "primary.main" }}>
+      <Typography variant="mono3" fontWeight={600} sx={{ ...firstLine, justifyContent: "center", color: "primary.main" }}>
         Pinned
       </Typography>
     );
@@ -102,7 +104,7 @@ function TtlCell({ plot, ttlSeconds }: { plot: PlotSummary; ttlSeconds: number }
   const fraction = Math.max(0, Math.min(1, remaining / ttlSeconds));
   const expiring = fraction < 0.15;
   return (
-    <Box sx={{ minWidth: 56 }}>
+    <Box sx={{ width: "100%" }}>
       <Typography variant="mono3" component="div" sx={{ ...firstLine, color: "text.secondary" }}>
         {fmtDuration(remaining)}
       </Typography>
@@ -136,6 +138,7 @@ export function PlotTable({
   const [draftName, setDraftName] = useState("");
   const [menu, setMenu] = useState<{ anchor: HTMLElement; plot: PlotSummary } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<PlotSummary | null>(null);
+  const [confirmUnpin, setConfirmUnpin] = useState<PlotSummary | null>(null);
   const pendingRename = useRef<PlotSummary | null>(null);
 
   const sorted = useMemo(() => sortPlots(plots, sort), [plots, sort]);
@@ -181,7 +184,7 @@ export function PlotTable({
         <colgroup>
           <col style={{ width: 44 }} />
           <col />
-          <col style={{ width: 64 }} />
+          <col style={{ width: 72 }} />
           <col style={{ width: 72 }} />
           <col style={{ width: 60 }} />
         </colgroup>
@@ -210,19 +213,21 @@ export function PlotTable({
                 Name
               </TableSortLabel>
             </TableCell>
-            <TableCell align="right" sortDirection={sort.key === "points" ? sort.dir : false}>
+            <TableCell align="right" sx={{ pl: 0.5 }} sortDirection={sort.key === "points" ? sort.dir : false}>
               <TableSortLabel
                 active={sort.key === "points"}
                 direction={sort.key === "points" ? sort.dir : "desc"}
+                sx={{ flexDirection: "row-reverse" }}
                 onClick={() => toggle("points")}
               >
                 Pts
               </TableSortLabel>
             </TableCell>
-            <TableCell align="right" sortDirection={sort.key === "created_at" ? sort.dir : false}>
+            <TableCell align="right" sx={ttlCellPadding} sortDirection={sort.key === "created_at" ? sort.dir : false}>
               <TableSortLabel
                 active={sort.key === "created_at"}
                 direction={sort.key === "created_at" ? sort.dir : "desc"}
+                sx={{ flexDirection: "row-reverse" }}
                 onClick={() => toggle("created_at")}
               >
                 TTL
@@ -239,6 +244,7 @@ export function PlotTable({
           {sorted.map((plot) => {
             const isSelected = selectedSet.has(plot.id);
             const colour = seriesColour(plot.colour_index, colourMode);
+            const pastTtl = plot.pinned && ttlSeconds > 0 && plot.ttl_remaining_seconds <= 0;
             const flags = [plot.has_errors && "errors", plot.has_fit && "fit"].filter(Boolean);
             return (
               <TableRow
@@ -327,18 +333,29 @@ export function PlotTable({
                     {plot.points.toLocaleString()}
                   </Typography>
                 </TableCell>
-                <TableCell align="right">
+                <TableCell align="right" sx={ttlCellPadding}>
                   <TtlCell plot={plot} ttlSeconds={ttlSeconds} />
                 </TableCell>
                 <TableCell padding="checkbox" sx={{ "&&": { pt: 0.75 } }} onClick={(e) => e.stopPropagation()}>
                   <Stack direction="row" alignItems="center" justifyContent="flex-end" sx={{ minHeight: FIRST_LINE }}>
-                    <Tooltip title={plot.pinned ? "Unpin - allow this plot to expire" : "Pin - keep this plot from expiring"}>
+                    <Tooltip
+                      title={
+                        pastTtl
+                          ? "Expired - unpinning removes it now"
+                          : plot.pinned
+                            ? "Unpin - allow this plot to expire"
+                            : "Pin - keep this plot from expiring"
+                      }
+                    >
                       <IconButton
                         size="small"
-                        aria-label={`Pin ${plot.name}`}
+                        aria-label={`Pin ${plot.name}${pastTtl ? " (expired)" : ""}`}
                         aria-pressed={plot.pinned}
-                        color={plot.pinned ? "primary" : "default"}
-                        onClick={() => onTogglePin(plot.id, !plot.pinned)}
+                        color={pastTtl ? "warning" : plot.pinned ? "primary" : "default"}
+                        onClick={() => {
+                          if (pastTtl) setConfirmUnpin(plot);
+                          else onTogglePin(plot.id, !plot.pinned);
+                        }}
                       >
                         <Pin {...ICON_XS} fill={plot.pinned ? "currentColor" : "none"} />
                       </IconButton>
@@ -410,6 +427,19 @@ export function PlotTable({
         onCancel={() => setConfirmDelete(null)}
       >
         This plot is pinned so it would not expire. Deleting it removes it for everyone and can't be undone.
+      </ConfirmDialog>
+      <ConfirmDialog
+        open={confirmUnpin !== null}
+        title={`Unpin and remove ${confirmUnpin?.name ?? ""}?`}
+        confirmLabel="Unpin and remove"
+        destructive
+        onConfirm={() => {
+          if (confirmUnpin) onTogglePin(confirmUnpin.id, false);
+          setConfirmUnpin(null);
+        }}
+        onCancel={() => setConfirmUnpin(null)}
+      >
+        This plot has expired and is only kept because it is pinned. Unpinning removes it immediately, for everyone, and can't be undone.
       </ConfirmDialog>
     </TableContainer>
   );
