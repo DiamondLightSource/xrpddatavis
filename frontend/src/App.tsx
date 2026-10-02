@@ -1,18 +1,7 @@
 import { useMemo, useState } from "react";
-import {
-  Alert,
-  Box,
-  Button,
-  Divider,
-  Snackbar,
-  Stack,
-  TextField,
-  Typography,
-} from "@mui/material";
-import { ColourSchemeButton, Logo, Navbar } from "@diamondlightsource/sci-react-ui";
+import { Alert, Box, Button, Divider, Snackbar, Stack, Typography } from "@mui/material";
 import { useColorScheme } from "@mui/material/styles";
-import { Trash2, Upload } from "lucide-react";
-import { ICON_SM } from "./iconSizes";
+import { ColourSchemeButton, Logo, Navbar } from "@diamondlightsource/sci-react-ui";
 import { api, ApiError } from "./api/client";
 import type { PlotRequest } from "./api/types";
 import { useLivePlots } from "./hooks/useLivePlots";
@@ -23,7 +12,9 @@ import { useAppInfo } from "./hooks/useAppInfo";
 import { usePersistentState } from "./hooks/usePersistentState";
 import { useResizableWidth } from "./hooks/useResizableWidth";
 import { fmtTime } from "./format";
-import { StatusChips } from "./components/StatusChips";
+import { ConnectionStatus, PlotCapacity } from "./components/StatusChips";
+import { ListToolbar } from "./components/ListToolbar";
+import { ConfirmDialog } from "./components/ConfirmDialog";
 import { SessionSelect } from "./components/SessionSelect";
 import { Facets } from "./components/Facets";
 import { PlotTable } from "./components/PlotTable";
@@ -44,7 +35,7 @@ const DEFAULT_OPTIONS: ChartOptions = {
 export default function App() {
   const { plots, limits, connection, error: liveError, updatedAt, refresh } = useLivePlots();
   const liveIds = useMemo(() => plots.map((p) => p.id), [plots]);
-  const { selected, toggle, selectMany, clear: clearSelection } = useSelection(liveIds);
+  const { selected, toggle, selectMany, deselectMany, clear: clearSelection } = useSelection(liveIds);
   const sessionFilter = useInstrumentSessionFilter(plots);
   const facets = useFacets(sessionFilter.filtered);
   const { beamline } = useAppInfo();
@@ -54,9 +45,10 @@ export default function App() {
   const [mode, setMode] = usePersistentState<LayoutMode>("mode", "overlay");
   const [options, setOptions] = usePersistentState<ChartOptions>("opts", DEFAULT_OPTIONS);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const [toast, setToast] = useState<{ message: string; severity: "success" | "error" } | null>(null);
 
-  const sidebar = useResizableWidth(440, 300, 720);
+  const sidebar = useResizableWidth(440, 340, 720);
 
   const needle = filterText.trim().toLowerCase();
   const visiblePlots = useMemo(() => {
@@ -71,11 +63,22 @@ export default function App() {
 
   const filtersActive =
     facets.isActive || needle !== "" || sessionFilter.session !== ALL_SESSIONS;
+  const visibleIds = useMemo(() => new Set(visiblePlots.map((p) => p.id)), [visiblePlots]);
   const selectedSet = useMemo(() => new Set(selected), [selected]);
   const selectedSummaries = useMemo(
     () => plots.filter((p) => selectedSet.has(p.id)),
     [plots, selectedSet],
   );
+
+  const hiddenSelected = selected.filter((id) => !visibleIds.has(id)).length;
+
+  const emptyMessage = plots.length
+    ? "No plots match the current filters."
+    : connection === "connecting"
+      ? "Loading plots…"
+      : liveError
+        ? "Plots could not be loaded."
+        : "No plots yet — POST a DataPlot to /plot.";
 
   const notify = (message: string, severity: "success" | "error" = "error") =>
     setToast({ message, severity });
@@ -105,9 +108,8 @@ export default function App() {
     void withErrorToast(() => api.edit(id, { name }), "Rename");
 
   const handleClearServer = () => {
-    if (!plots.length) return;
-    if (!window.confirm(`Delete all ${plots.length} plots from the server?`)) return;
-    void withErrorToast(() => api.clearAll(), "Clear");
+    setConfirmClear(false);
+    void withErrorToast(() => api.clearAll(), "Delete all");
   };
 
   const handleUpload = async (data: PlotRequest) => {
@@ -169,12 +171,7 @@ export default function App() {
         }
         rightSlot={
           <Stack direction="row" spacing={1.5} alignItems="center">
-            <StatusChips
-              held={plots.length}
-              maxPlots={limits.max_plots}
-              ttlSeconds={limits.ttl_seconds}
-              connection={connection}
-            />
+            <ConnectionStatus connection={connection} />
             <ColourSchemeButton />
           </Stack>
         }
@@ -205,28 +202,20 @@ export default function App() {
             display: "flex",
             flexDirection: "column",
             minHeight: 0,
-            borderRight: { xs: 0, md: 1 },
-            borderBottom: { xs: 1, md: 0 },
-            borderColor: "divider",
+            borderStyle: "solid",
+            borderWidth: { xs: "0 0 1px 0", md: "0 1px 0 0" },
+            borderColor: "border.subtle",
             backgroundColor: "background.paper",
           }}
         >
-          <Stack spacing={1.25} sx={{ p: 1.25, borderBottom: 1, borderColor: "divider" }}>
-            <Stack direction="row" spacing={1}>
-              <TextField
-                size="small"
-                placeholder="Filter by name, file or scan number…"
-                value={filterText}
-                onChange={(e) => setFilterText(e.target.value)}
-                fullWidth
-              />
-              {filtersActive && (
-                <Button size="small" variant="outlined" onClick={resetFilters} sx={{ textTransform: "none" }}>
-                  Reset
-                </Button>
-              )}
-            </Stack>
-
+          <Stack spacing={1.5} sx={{ p: 1.5, borderBottom: 1, borderColor: "divider" }}>
+            <ListToolbar
+              filterText={filterText}
+              onFilterTextChange={setFilterText}
+              onUpload={() => setUploadOpen(true)}
+              onClearServer={() => setConfirmClear(true)}
+              canClearServer={plots.length > 0}
+            />
             <Facets
               typeOptions={facets.typeOptions}
               dataType={facets.dataType}
@@ -235,34 +224,31 @@ export default function App() {
               filenumber={facets.filenumber}
               onFilenumberChange={facets.setFilenumber}
             />
+          </Stack>
 
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-              <Button size="small" variant="outlined" sx={{ textTransform: "none" }} onClick={() => selectMany(visiblePlots.map((p) => p.id))}>
-                Select all
-              </Button>
-              <Button size="small" variant="outlined" sx={{ textTransform: "none" }} onClick={clearSelection}>
-                Deselect all
-              </Button>
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={<Upload {...ICON_SM} />}
-                sx={{ textTransform: "none" }}
-                onClick={() => setUploadOpen(true)}
-              >
-                Upload file…
-              </Button>
-              <Button
-                size="small"
-                variant="outlined"
-                color="error"
-                startIcon={<Trash2 {...ICON_SM} />}
-                sx={{ textTransform: "none" }}
-                onClick={handleClearServer}
-                title="Delete every plot on the server"
-              >
-                Clear server
-              </Button>
+          <Stack
+            direction="row"
+            alignItems="center"
+            justifyContent="space-between"
+            useFlexGap
+            sx={{ px: 1.5, py: 0.5, minHeight: 36, flexWrap: "wrap", columnGap: 1, borderBottom: 1, borderColor: "divider" }}
+          >
+            <Typography variant="meta" role="status" sx={{ color: "text.secondary" }}>
+              {filtersActive ? `${visiblePlots.length} of ${plots.length} plots` : `${plots.length} plots`} ·{" "}
+              {selected.length} on chart
+              {hiddenSelected > 0 ? ` (${hiddenSelected} hidden by filters)` : ""}
+            </Typography>
+            <Stack direction="row" spacing={0.5}>
+              {selected.length > 0 && (
+                <Button size="small" color="inherit" onClick={clearSelection}>
+                  Clear selection
+                </Button>
+              )}
+              {filtersActive && (
+                <Button size="small" color="inherit" onClick={resetFilters}>
+                  Clear filters
+                </Button>
+              )}
             </Stack>
           </Stack>
 
@@ -270,22 +256,23 @@ export default function App() {
             plots={visiblePlots}
             selected={selected}
             onToggle={toggle}
+            onSelectAll={selectMany}
+            onDeselectAll={deselectMany}
             onDelete={handleDelete}
             onTogglePin={handleTogglePin}
             onCycleColour={handleCycleColour}
             onRename={handleRename}
             ttlSeconds={limits.ttl_seconds}
-            emptyMessage={plots.length ? "No plots match the current filters." : "No plots yet — POST a DataPlot to /plot."}
+            emptyMessage={emptyMessage}
           />
 
           <Stack
             direction="row"
+            alignItems="center"
             justifyContent="space-between"
-            sx={{ px: 1.25, py: 0.75, borderTop: 1, borderColor: "divider" }}
+            sx={{ px: 1.5, py: 1, borderTop: 1, borderColor: "divider" }}
           >
-            <Typography variant="meta" sx={{ color: "text.muted" }}>
-              {selected.length} shown of {plots.length}
-            </Typography>
+            <PlotCapacity held={plots.length} maxPlots={limits.max_plots} ttlSeconds={limits.ttl_seconds} />
             <Typography variant="meta" sx={{ color: "text.muted" }}>
               {updatedAt ? `updated ${fmtTime(updatedAt)}` : ""}
             </Typography>
@@ -296,7 +283,7 @@ export default function App() {
             role="separator"
             aria-orientation="vertical"
             aria-label="Resize the plot list"
-            aria-valuemin={300}
+            aria-valuemin={340}
             aria-valuemax={720}
             aria-valuenow={Math.round(sidebar.width)}
             tabIndex={0}
@@ -348,6 +335,17 @@ export default function App() {
       </Box>
 
       <UploadDialog open={uploadOpen} onClose={() => setUploadOpen(false)} onSubmit={handleUpload} />
+
+      <ConfirmDialog
+        open={confirmClear}
+        title={`Delete all ${plots.length} plots?`}
+        confirmLabel="Delete all"
+        destructive
+        onConfirm={handleClearServer}
+        onCancel={() => setConfirmClear(false)}
+      >
+        This removes every plot from the server for everyone, including pinned plots. It can't be undone.
+      </ConfirmDialog>
 
       <Snackbar
         open={toast !== null}

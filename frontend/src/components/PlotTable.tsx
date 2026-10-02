@@ -1,10 +1,13 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Box,
   Checkbox,
-  Chip,
   IconButton,
   LinearProgress,
+  ListItemIcon,
+  ListItemText,
+  Menu,
+  MenuItem,
   Stack,
   Table,
   TableBody,
@@ -16,14 +19,34 @@ import {
   TextField,
   Tooltip,
   Typography,
-  useTheme,
 } from "@mui/material";
-import { Pin, Trash2 } from "lucide-react";
+import { MoreVertical, Pencil, Pin, Trash2 } from "lucide-react";
 import type { PlotSummary } from "../api/types";
 import { fmtDuration, fmtNumber } from "../format";
-import { ICON_XS } from "../iconSizes";
+import { ICON_SM, ICON_XS } from "../iconSizes";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { seriesColour } from "../palette";
 import { useColorScheme } from "@mui/material/styles";
+
+const FIRST_LINE = 28;
+
+const firstLine = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "flex-end",
+  minHeight: FIRST_LINE,
+} as const;
+
+const visuallyHidden = {
+  position: "absolute",
+  top: 0,
+  left: 0,
+  width: 1,
+  height: 1,
+  overflow: "hidden",
+  clip: "rect(0 0 0 0)",
+  whiteSpace: "nowrap",
+} as const;
 
 type SortKey = "name" | "points" | "created_at";
 
@@ -31,6 +54,8 @@ interface PlotTableProps {
   plots: PlotSummary[];
   selected: string[];
   onToggle: (id: string, force?: boolean) => void;
+  onSelectAll: (ids: string[]) => void;
+  onDeselectAll: (ids: string[]) => void;
   onDelete: (id: string) => void;
   onTogglePin: (id: string, pinned: boolean) => void;
   onCycleColour: (id: string, colourIndex: number) => void;
@@ -67,7 +92,7 @@ function sortPlots(plots: PlotSummary[], sort: { key: SortKey; dir: "asc" | "des
 function TtlCell({ plot, ttlSeconds }: { plot: PlotSummary; ttlSeconds: number }) {
   if (plot.pinned) {
     return (
-      <Typography variant="mono3" fontWeight={600} sx={{ color: "primary.main" }}>
+      <Typography variant="mono3" fontWeight={600} sx={{ ...firstLine, color: "primary.main" }}>
         Pinned
       </Typography>
     );
@@ -78,14 +103,14 @@ function TtlCell({ plot, ttlSeconds }: { plot: PlotSummary; ttlSeconds: number }
   const expiring = fraction < 0.15;
   return (
     <Box sx={{ minWidth: 56 }}>
-      <Typography variant="mono3" sx={{ color: "text.secondary" }}>
+      <Typography variant="mono3" component="div" sx={{ ...firstLine, color: "text.secondary" }}>
         {fmtDuration(remaining)}
       </Typography>
       <LinearProgress
         variant="determinate"
         value={fraction * 100}
         color={expiring ? "warning" : "success"}
-        sx={{ height: 3, borderRadius: 1, mt: 0.5 }}
+        sx={{ height: 3, borderRadius: 1, mt: -0.25 }}
       />
     </Box>
   );
@@ -95,6 +120,8 @@ export function PlotTable({
   plots,
   selected,
   onToggle,
+  onSelectAll,
+  onDeselectAll,
   onDelete,
   onTogglePin,
   onCycleColour,
@@ -103,19 +130,41 @@ export function PlotTable({
   emptyMessage,
 }: PlotTableProps) {
   const { sort, toggle } = useSort();
-  const theme = useTheme();
-  const { mode, systemMode } = useColorScheme();
-  const colourMode = (mode === "system" ? systemMode : mode) === "dark" ? "dark" : "light";
+  const { colorScheme } = useColorScheme();
+  const colourMode = colorScheme === "dark" ? "dark" : "light";
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
+  const [menu, setMenu] = useState<{ anchor: HTMLElement; plot: PlotSummary } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<PlotSummary | null>(null);
+  const pendingRename = useRef<PlotSummary | null>(null);
 
   const sorted = useMemo(() => sortPlots(plots, sort), [plots, sort]);
   const selectedSet = useMemo(() => new Set(selected), [selected]);
 
-  const commitRename = (id: string) => {
+  const selectedVisible = sorted.filter((p) => selectedSet.has(p.id)).length;
+  const allSelected = sorted.length > 0 && selectedVisible === sorted.length;
+  const someSelected = selectedVisible > 0 && !allSelected;
+
+  const startRename = (plot: PlotSummary) => {
+    renameDone.current = false;
+    setEditingId(plot.id);
+    setDraftName(plot.name);
+  };
+
+  const renameDone = useRef(false);
+
+  const focusRowMenu = (id: string) =>
+    requestAnimationFrame(() =>
+      document.querySelector<HTMLElement>(`[data-row-menu="${id}"]`)?.focus(),
+    );
+
+  const finishRename = (plot: PlotSummary, commit: boolean, restoreFocus: boolean) => {
+    if (renameDone.current) return;
+    renameDone.current = true;
     const value = draftName.trim();
     setEditingId(null);
-    if (value) onRename(id, value);
+    if (commit && value && value !== plot.name) onRename(plot.id, value);
+    if (restoreFocus) focusRowMenu(plot.id);
   };
 
   if (!sorted.length) {
@@ -127,11 +176,31 @@ export function PlotTable({
   }
 
   return (
-    <TableContainer sx={{ flex: 1, minHeight: 0 }}>
-      <Table size="small" stickyHeader aria-label="Live plots">
+    <TableContainer sx={{ flex: 1, minHeight: 0, border: 0, borderRadius: 0 }}>
+      <Table size="small" stickyHeader aria-label="Live plots" sx={{ tableLayout: "fixed", width: "100%" }}>
+        <colgroup>
+          <col style={{ width: 44 }} />
+          <col />
+          <col style={{ width: 64 }} />
+          <col style={{ width: 72 }} />
+          <col style={{ width: 60 }} />
+        </colgroup>
         <TableHead>
           <TableRow>
-            <TableCell padding="checkbox" sx={{ width: 60 }} />
+            <TableCell padding="checkbox">
+              <Checkbox
+                size="small"
+                sx={{ p: 0.5 }}
+                checked={allSelected}
+                indeterminate={someSelected}
+                onChange={() => {
+                  const ids = sorted.map((p) => p.id);
+                  if (allSelected) onDeselectAll(ids);
+                  else onSelectAll(ids);
+                }}
+                inputProps={{ "aria-label": allSelected ? "Deselect all listed plots" : "Select all listed plots" }}
+              />
+            </TableCell>
             <TableCell sortDirection={sort.key === "name" ? sort.dir : false}>
               <TableSortLabel
                 active={sort.key === "name"}
@@ -159,13 +228,18 @@ export function PlotTable({
                 TTL
               </TableSortLabel>
             </TableCell>
-            <TableCell padding="checkbox" sx={{ width: 40 }} />
+            <TableCell padding="checkbox">
+              <Box component="span" sx={visuallyHidden}>
+                Actions
+              </Box>
+            </TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
           {sorted.map((plot) => {
             const isSelected = selectedSet.has(plot.id);
             const colour = seriesColour(plot.colour_index, colourMode);
+            const flags = [plot.has_errors && "errors", plot.has_fit && "fit"].filter(Boolean);
             return (
               <TableRow
                 key={plot.id}
@@ -177,138 +251,166 @@ export function PlotTable({
                 }}
                 sx={{ cursor: "pointer", verticalAlign: "top" }}
               >
-                <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
-                  <Stack direction="row" alignItems="center" spacing={0.5}>
-                    <Checkbox
-                      size="small"
-                      checked={isSelected}
-                      onChange={(e) => onToggle(plot.id, e.target.checked)}
-                      inputProps={{ "aria-label": `Show ${plot.name}` }}
-                    />
-                    <Tooltip title="Change colour">
-                      <Box
-                        component="button"
-                        onClick={() => onCycleColour(plot.id, plot.colour_index + 1)}
-                        aria-label={`Change colour for ${plot.name}`}
-                        sx={{
-                          width: 12,
-                          height: 12,
-                          borderRadius: 0.5,
-                          border: "none",
-                          cursor: "pointer",
-                          backgroundColor: colour,
-                          opacity: isSelected ? 1 : 0.4,
-                          p: 0,
-                        }}
-                      />
-                    </Tooltip>
-                  </Stack>
+                <TableCell padding="checkbox" sx={{ "&&": { pt: 0.75 } }} onClick={(e) => e.stopPropagation()}>
+                  <Checkbox
+                    size="small"
+                    sx={{ p: 0.5 }}
+                    checked={isSelected}
+                    onChange={(e) => onToggle(plot.id, e.target.checked)}
+                    inputProps={{ "aria-label": `Show ${plot.name}` }}
+                  />
                 </TableCell>
-                <TableCell onClick={(e) => e.stopPropagation()}>
-                  {editingId === plot.id ? (
-                    <TextField
-                      autoFocus
-                      size="small"
-                      variant="standard"
-                      value={draftName}
-                      onChange={(e) => setDraftName(e.target.value)}
-                      onBlur={() => commitRename(plot.id)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") commitRename(plot.id);
-                        if (e.key === "Escape") setEditingId(null);
-                      }}
-                      fullWidth
-                    />
-                  ) : (
-                    <Typography
-                      variant="body2"
-                      fontWeight={500}
-                      onDoubleClick={() => {
-                        setEditingId(plot.id);
-                        setDraftName(plot.name);
-                      }}
-                      title="Double-click to rename"
-                      sx={{ wordBreak: "break-word" }}
-                    >
-                      {plot.name}
-                    </Typography>
-                  )}
-                  <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 0.25 }}>
-                    {plot.data_type && (
-                      <Chip
-                        label={plot.data_type.toUpperCase()}
+                <TableCell sx={{ overflow: "hidden" }}>
+                  <Box sx={{ minHeight: FIRST_LINE, display: "flex", alignItems: "center" }}>
+                    {editingId === plot.id ? (
+                      <TextField
+                        autoFocus
                         size="small"
-                        variant="outlined"
-                        color="primary"
-                        sx={{ height: 18, fontSize: 10, fontWeight: 600 }}
+                        variant="standard"
+                        value={draftName}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => setDraftName(e.target.value)}
+                        onBlur={() => finishRename(plot, true, false)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") finishRename(plot, true, true);
+                          if (e.key === "Escape") finishRename(plot, false, true);
+                        }}
+                        slotProps={{ htmlInput: { "aria-label": `Rename ${plot.name}` } }}
+                        fullWidth
                       />
+                    ) : (
+                      <Tooltip title={plot.filepath ? `${plot.name} - ${plot.filepath}` : plot.name}>
+                        <Typography
+                          variant="body2"
+                          fontWeight={500}
+                          noWrap
+                          onDoubleClick={() => startRename(plot)}
+                          sx={{ minWidth: 0 }}
+                        >
+                          {plot.name}
+                        </Typography>
+                      </Tooltip>
                     )}
-                    {plot.filenumber !== null && (
-                      <Chip
-                        label={`#${plot.filenumber}`}
+                    <Tooltip title="Change colour">
+                      <IconButton
                         size="small"
-                        variant="outlined"
-                        sx={{ height: 18, fontSize: 10 }}
-                      />
-                    )}
-                    {plot.has_errors && (
-                      <Chip label="e" size="small" variant="outlined" sx={{ height: 18, fontSize: 10 }} />
-                    )}
-                    {plot.has_fit && (
-                      <Chip
-                        label="fit"
-                        size="small"
-                        variant="outlined"
-                        sx={{ height: 18, fontSize: 10 }}
-                      />
-                    )}
-                  </Stack>
-                  <Typography variant="mono3" sx={{ color: "text.muted", wordBreak: "break-all" }}>
+                        aria-label={`Change colour for ${plot.name}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onCycleColour(plot.id, plot.colour_index + 1);
+                        }}
+                        sx={{ p: 0.5, ml: "auto", flexShrink: 0 }}
+                      >
+                        <Box
+                          component="span"
+                          sx={{
+                            width: 14,
+                            height: 14,
+                            borderRadius: 0.5,
+                            backgroundColor: colour,
+                          }}
+                        />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                  <Typography variant="meta" component="div" noWrap sx={{ color: "text.secondary" }}>
+                    {[plot.data_type?.toUpperCase(), plot.filenumber !== null && `#${plot.filenumber}`, ...flags]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </Typography>
+                  <Typography variant="mono3" component="div" noWrap sx={{ color: "text.muted" }}>
                     x {fmtNumber(plot.x_min)} – {fmtNumber(plot.x_max)}
-                    {plot.filepath ? ` · ${plot.filepath}` : ""}
                   </Typography>
                 </TableCell>
                 <TableCell align="right">
-                  <Typography variant="mono3" sx={{ color: "text.secondary" }}>
+                  <Typography variant="mono3" component="div" sx={{ ...firstLine, color: "text.secondary" }}>
                     {plot.points.toLocaleString()}
                   </Typography>
                 </TableCell>
-                <TableCell align="right" onClick={(e) => e.stopPropagation()}>
-                  <Stack direction="row" alignItems="center" justifyContent="flex-end" spacing={0.5}>
-                    <TtlCell plot={plot} ttlSeconds={ttlSeconds} />
+                <TableCell align="right">
+                  <TtlCell plot={plot} ttlSeconds={ttlSeconds} />
+                </TableCell>
+                <TableCell padding="checkbox" sx={{ "&&": { pt: 0.75 } }} onClick={(e) => e.stopPropagation()}>
+                  <Stack direction="row" alignItems="center" justifyContent="flex-end" sx={{ minHeight: FIRST_LINE }}>
                     <Tooltip title={plot.pinned ? "Unpin - allow this plot to expire" : "Pin - keep this plot from expiring"}>
                       <IconButton
                         size="small"
-                        aria-label={`${plot.pinned ? "Unpin" : "Pin"} ${plot.name}`}
+                        aria-label={`Pin ${plot.name}`}
                         aria-pressed={plot.pinned}
                         color={plot.pinned ? "primary" : "default"}
                         onClick={() => onTogglePin(plot.id, !plot.pinned)}
                       >
-                        <Pin {...ICON_XS} style={{ opacity: plot.pinned ? 1 : 0.5 }} />
+                        <Pin {...ICON_XS} fill={plot.pinned ? "currentColor" : "none"} />
                       </IconButton>
                     </Tooltip>
-                  </Stack>
-                </TableCell>
-                <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
-                  <Tooltip title="Delete plot">
                     <IconButton
                       size="small"
-                      aria-label={`Delete ${plot.name}`}
-                      onClick={() => onDelete(plot.id)}
-                      sx={{
-                        color: "text.muted",
-                        "&:hover": { color: "error.main", backgroundColor: theme.palette.surface.subtle },
-                      }}
+                      aria-label={`More actions for ${plot.name}`}
+                      aria-haspopup="menu"
+                      aria-expanded={menu?.plot.id === plot.id ? true : undefined}
+                      data-row-menu={plot.id}
+                      onClick={(e) => setMenu({ anchor: e.currentTarget, plot })}
                     >
-                      <Trash2 {...ICON_XS} />
+                      <MoreVertical {...ICON_XS} />
                     </IconButton>
-                  </Tooltip>
+                  </Stack>
                 </TableCell>
               </TableRow>
             );
           })}
         </TableBody>
       </Table>
+      <Menu
+        anchorEl={menu?.anchor}
+        open={menu !== null}
+        onClose={() => setMenu(null)}
+        slotProps={{
+          transition: {
+            onExited: () => {
+              if (pendingRename.current) startRename(pendingRename.current);
+              pendingRename.current = null;
+            },
+          },
+        }}
+      >
+        <MenuItem
+          onClick={() => {
+            pendingRename.current = menu?.plot ?? null;
+            setMenu(null);
+          }}
+        >
+          <ListItemIcon>
+            <Pencil {...ICON_SM} />
+          </ListItemIcon>
+          <ListItemText>Rename</ListItemText>
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            if (menu?.plot.pinned) setConfirmDelete(menu.plot);
+            else if (menu) onDelete(menu.plot.id);
+            setMenu(null);
+          }}
+          sx={{ color: "error.main" }}
+        >
+          <ListItemIcon sx={{ color: "inherit" }}>
+            <Trash2 {...ICON_SM} />
+          </ListItemIcon>
+          <ListItemText>Delete</ListItemText>
+        </MenuItem>
+      </Menu>
+      <ConfirmDialog
+        open={confirmDelete !== null}
+        title={`Delete pinned plot ${confirmDelete?.name ?? ""}?`}
+        confirmLabel="Delete"
+        destructive
+        onConfirm={() => {
+          if (confirmDelete) onDelete(confirmDelete.id);
+          setConfirmDelete(null);
+        }}
+        onCancel={() => setConfirmDelete(null)}
+      >
+        This plot is pinned so it would not expire. Deleting it removes it for everyone and can't be undone.
+      </ConfirmDialog>
     </TableContainer>
   );
 }
