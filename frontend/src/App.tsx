@@ -9,24 +9,9 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { ColourSchemeButton, ImageColourSchemeSwitch, Navbar } from "@diamondlightsource/sci-react-ui";
+import { ColourSchemeButton, Logo, Navbar } from "@diamondlightsource/sci-react-ui";
+import { useColorScheme } from "@mui/material/styles";
 import { Trash2, Upload } from "lucide-react";
-// The logo, project name and beamline are composed by hand in `leftSlot`
-// (rather than via Navbar's own `logo` prop) so a vertical divider can sit
-// between each of the three, evenly spaced and vertically centred -
-// Navbar's built-in logo placement instead applies its own fixed margin with
-// no divider, which doesn't give that control.
-//
-// The image itself: the higher-level <Logo /> (and Navbar's `logo="theme"`
-// shorthand) reads theme.logos, which DiamondDSTheme only wires up to the
-// actual Diamond logo on sci-react-ui's main branch - not yet in 0.7.0
-// (latest on npm as of writing, same gap as font-styles.css - see
-// frontend/readme.md) - so ImageColourSchemeSwitch (the primitive both are
-// built on, which *is* in 0.7.0) is used directly with the same light/dark
-// SVGs main wires up by default. Revisit once a release past 0.7.0 ships
-// theme.logos.
-import diamondLogoLight from "./assets/diamond-logo-light.svg";
-import diamondLogoDark from "./assets/diamond-logo-dark.svg";
 import { ICON_SM } from "./iconSizes";
 import { api, ApiError } from "./api/client";
 import type { PlotRequest } from "./api/types";
@@ -63,6 +48,7 @@ export default function App() {
   const sessionFilter = useInstrumentSessionFilter(plots);
   const facets = useFacets(sessionFilter.filtered);
   const { beamline } = useAppInfo();
+  const { colorScheme } = useColorScheme();
 
   const [filterText, setFilterText] = useState("");
   const [mode, setMode] = usePersistentState<LayoutMode>("mode", "overlay");
@@ -141,14 +127,10 @@ export default function App() {
         sx={{ px: 2 }}
         leftSlot={
           <Stack direction="row" spacing={2} alignItems="center" sx={{ minWidth: 0 }}>
-            <ImageColourSchemeSwitch
-              image={{
-                src: diamondLogoLight,
-                srcDark: diamondLogoDark,
-                alt: "Diamond Light Source",
-                height: "26",
-              }}
-            />
+            {/* Logo follows `mode`, which is "system" until the user picks one, so it
+                stays on the light artwork under an OS dark scheme; fixedTone pins it
+                to the resolved scheme. */}
+            <Logo fixedTone={colorScheme === "dark" ? "dark" : "light"} />
             <Divider orientation="vertical" flexItem sx={{ my: 1, borderColor: "divider" }} />
             <Typography variant="h6" sx={{ fontWeight: 700, flexShrink: 0, lineHeight: 1 }}>
               xrpddatavis
@@ -175,8 +157,7 @@ export default function App() {
               </>
             )}
             {sessionFilter.options.length > 0 && (
-              <Box sx={{ display: { xs: "none", md: "flex" }, alignItems: "center", gap: 2 }}>
-                <Divider orientation="vertical" flexItem sx={{ my: 1, borderColor: "divider" }} />
+              <Box sx={{ display: { xs: "none", md: "flex" }, alignItems: "center" }}>
                 <SessionSelect
                   options={sessionFilter.options}
                   value={sessionFilter.session}

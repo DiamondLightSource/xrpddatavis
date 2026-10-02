@@ -75,22 +75,13 @@ something you run yourself for local dev.
   - it is ~1MB and doesn't need to be part of the app's own bundle.
   `PlotlyChart.tsx` talks to `window.Plotly`; `@types/plotly.js` is a dev
   dependency for typing only.
-* **Fonts**: SciReactUI's own `font-styles.css` convenience export
-  (Inter/Outfit/IBM Plex Mono, per the Typography usage guidance) exists on
-  its `main` branch but hadn't been published to npm as of `0.7.0`, the
-  latest release at time of writing - see `main.tsx` for the direct
-  `@fontsource*` imports used instead. Swap back to the single import once a
-  later release ships it.
-* **Diamond logo**: same gap, one level up - `DiamondDSTheme`'s `theme.logos`
-  (what the library's own `<Logo />`, and `Navbar`'s `logo="theme"` shorthand,
-  read) isn't wired to the actual Diamond SVGs in `0.7.0` either, so `App.tsx`
-  renders them via `ImageColourSchemeSwitch` directly (the primitive both are
-  built on, which *is* in `0.7.0`), with the same light/dark SVGs copied from
-  the library's `main` branch into `src/assets/`. It's composed by hand in
-  `leftSlot` alongside the project name and beamline, each pair separated by
-  a `Divider` - rather than via `Navbar`'s own `logo` prop, which places the
-  logo with a fixed margin and no divider between it and what follows.
-  Revisit both choices once a release past `0.7.0` ships `theme.logos`.
+* **Fonts and logo**: both come from `@diamondlightsource/sci-react-ui`
+  `>=0.7.2-rc.0` (`font-styles.css` in `main.tsx`; `<Logo />` reading
+  `theme.logos` in `App.tsx`), composed by hand in `Navbar`'s `leftSlot`
+  alongside the project name and beamline with a `Divider` between each.
+  `Logo` is given `fixedTone` from the resolved colour scheme because
+  `ImageColourSchemeSwitch` keys off `mode`, which is `"system"` until the
+  user picks one.
 * **`Navbar` with `containerWidth={false}`**: `Bar` (which `Navbar` and
   `AppTitlebar` both build on) centers its slots inside a `maxWidth="lg"`
   `Container` by default - fine for a marketing-style page, but it made the
