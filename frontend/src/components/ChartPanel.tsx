@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Box,
@@ -21,6 +21,7 @@ import { useColorScheme } from "@mui/material/styles";
 import type { PlotSummary } from "../api/types";
 import { buildChart, type ChartOptions, type LayoutMode } from "../chartBuilder";
 import { ICON_SM, ICON_XS } from "../iconSizes";
+import { resolveColour } from "../resolveColour";
 import { PlotlyChart, type PlotlyChartHandle } from "./PlotlyChart";
 import { usePlotDataCache } from "../hooks/usePlotDataCache";
 
@@ -79,7 +80,7 @@ export function ChartPanel({
   const chartRef = useRef<PlotlyChartHandle>(null);
   const { get: getPlotData, loadError } = usePlotDataCache(selectedSummaries);
 
-  const themeColours = useMemo(
+  const rawColours = useMemo(
     () => ({
       border: theme.palette.divider,
       borderStrong: theme.palette.border.strong,
@@ -87,10 +88,33 @@ export function ChartPanel({
       textSecondary: theme.palette.text.secondary,
       textMuted: theme.palette.text.muted ?? theme.palette.text.secondary,
       surface: theme.palette.background.paper,
-      fontFamily: theme.typography.fontFamily ?? "sans-serif",
     }),
     [theme],
   );
+
+  const resolveAll = useCallback(
+    () => ({
+      border: resolveColour(rawColours.border),
+      borderStrong: resolveColour(rawColours.borderStrong),
+      textPrimary: resolveColour(rawColours.textPrimary),
+      textSecondary: resolveColour(rawColours.textSecondary),
+      textMuted: resolveColour(rawColours.textMuted),
+      surface: resolveColour(rawColours.surface),
+      fontFamily: theme.typography.fontFamily ?? "sans-serif",
+    }),
+    [rawColours, theme.typography.fontFamily],
+  );
+
+  const [themeColours, setThemeColours] = useState(resolveAll);
+
+  // The data-mode attribute flips after React renders the new colour scheme, so
+  // re-resolve when it changes instead of trusting the render that saw it.
+  useEffect(() => {
+    setThemeColours(resolveAll());
+    const observer = new MutationObserver(() => setThemeColours(resolveAll()));
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-mode"] });
+    return () => observer.disconnect();
+  }, [resolveAll, colorScheme]);
 
   // Not memoized: `getPlotData` reads from a ref-backed cache that fills in
   // asynchronously (usePlotDataCache), so its *identity* never changes even
