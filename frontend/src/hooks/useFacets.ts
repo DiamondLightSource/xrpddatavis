@@ -22,7 +22,8 @@ export interface FilenumberOption {
  * plots are actually live - an option only exists while at least one plot
  * needs it. Both are multi-select; an empty selection means "all". File
  * numbers are scoped to the selected types, so changing type shows only the
- * file numbers relevant to it.
+ * file numbers relevant to it - a file number that is still offered stays
+ * selected, so "file 1" can be combined with any type.
  */
 export function useFacets(plots: PlotSummary[]) {
   const [dataTypes, setDataTypes] = usePersistentState<string[]>("facetDataTypes", []);
@@ -55,7 +56,6 @@ export function useFacets(plots: PlotSummary[]) {
     for (const plot of byType) {
       if (plot.filenumber !== null) counts.set(plot.filenumber, (counts.get(plot.filenumber) ?? 0) + 1);
     }
-    if (counts.size < 2) return [];
     return [...counts.entries()]
       .sort((a, b) => a[0] - b[0])
       .map(([number, count]) => ({ value: String(number), label: `#${number}`, count }));
@@ -85,11 +85,6 @@ export function useFacets(plots: PlotSummary[]) {
     [byType, filenumbers],
   );
 
-  const setTypes = (values: string[]) => {
-    setDataTypes(values);
-    setFilenumbers([]); // changing category makes the previous file-number choice meaningless
-  };
-
   const reset = () => {
     setDataTypes([]);
     setFilenumbers([]);
@@ -97,7 +92,7 @@ export function useFacets(plots: PlotSummary[]) {
 
   return {
     dataTypes,
-    setTypes,
+    setTypes: setDataTypes,
     filenumbers,
     setFilenumbers,
     typeOptions,

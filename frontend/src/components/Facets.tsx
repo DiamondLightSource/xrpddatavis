@@ -22,13 +22,17 @@ function FacetSelect<T extends { value: string; label: string; count: number }>(
   onChange,
   ariaLabel,
 }: FacetSelectProps<T>) {
-  if (!options.length) return null;
+  // stays in the row, disabled, when there is nothing to choose between -
+  // hiding it would make the other field stretch and the row jump around.
+  // A lone option is shown as the value, since that is what is being viewed.
+  const disabled = options.length < 2;
   const labelOf = (v: string) => options.find((o) => o.value === v)?.label ?? v;
   return (
     <TextField
       select
       size="small"
       label={label}
+      disabled={disabled}
       value={value}
       onChange={(e) => {
         const next = e.target.value as unknown as string | string[];
@@ -45,6 +49,7 @@ function FacetSelect<T extends { value: string; label: string; count: number }>(
           displayEmpty: true,
           renderValue: (selected) => {
             const values = selected as string[];
+            if (disabled) return options.length === 1 ? options[0].label : "–";
             if (values.length === 0) return allLabel;
             if (values.length > MAX_NAMED) return `${values.length} selected`;
             return values.map(labelOf).join(", ");
