@@ -85,8 +85,7 @@ export default function App() {
 
   const resetFilters = () => {
     setFilterText("");
-    facets.setType("__all__");
-    facets.setFilenumber("__all__");
+    facets.reset();
     sessionFilter.setSession(ALL_SESSIONS);
   };
 
@@ -218,11 +217,11 @@ export default function App() {
             />
             <Facets
               typeOptions={facets.typeOptions}
-              dataType={facets.dataType}
-              onTypeChange={facets.setType}
+              dataTypes={facets.dataTypes}
+              onTypesChange={facets.setTypes}
               filenumberOptions={facets.filenumberOptions}
-              filenumber={facets.filenumber}
-              onFilenumberChange={facets.setFilenumber}
+              filenumbers={facets.filenumbers}
+              onFilenumbersChange={facets.setFilenumbers}
             />
           </Stack>
 
