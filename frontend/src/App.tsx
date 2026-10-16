@@ -3,7 +3,7 @@ import { Alert, Box, Button, Divider, Snackbar, Stack, Typography } from "@mui/m
 import { useColorScheme } from "@mui/material/styles";
 import { ColourSchemeButton, Logo, Navbar } from "@diamondlightsource/sci-react-ui";
 import { api, ApiError } from "./api/client";
-import type { PlotRequest } from "./api/types";
+import type { PlotRequest, PlotSummary } from "./api/types";
 import { useLivePlots } from "./hooks/useLivePlots";
 import { useSelection } from "./hooks/useSelection";
 import { useFacets } from "./hooks/useFacets";
@@ -35,7 +35,18 @@ const DEFAULT_OPTIONS: ChartOptions = {
 export default function App() {
   const { plots, limits, connection, error: liveError, updatedAt, refresh } = useLivePlots();
   const liveIds = useMemo(() => plots.map((p) => p.id), [plots]);
-  const { selected, toggle, selectMany, deselectMany, clear: clearSelection } = useSelection(liveIds);
+  const newestId = useMemo(
+    () =>
+      plots.reduce<PlotSummary | null>(
+        (best, p) => (best === null || p.created_at > best.created_at ? p : best),
+        null,
+      )?.id ?? null,
+    [plots],
+  );
+  const { selected, toggle, selectMany, deselectMany, clear: clearSelection } = useSelection(
+    liveIds,
+    newestId,
+  );
   const sessionFilter = useInstrumentSessionFilter(plots);
   const facets = useFacets(sessionFilter.filtered);
   const { beamline } = useAppInfo();
@@ -85,8 +96,7 @@ export default function App() {
 
   const resetFilters = () => {
     setFilterText("");
-    facets.setType("__all__");
-    facets.setFilenumber("__all__");
+    facets.reset();
     sessionFilter.setSession(ALL_SESSIONS);
   };
 
@@ -218,11 +228,11 @@ export default function App() {
             />
             <Facets
               typeOptions={facets.typeOptions}
-              dataType={facets.dataType}
-              onTypeChange={facets.setType}
+              dataTypes={facets.dataTypes}
+              onTypesChange={facets.setTypes}
               filenumberOptions={facets.filenumberOptions}
-              filenumber={facets.filenumber}
-              onFilenumberChange={facets.setFilenumber}
+              filenumbers={facets.filenumbers}
+              onFilenumbersChange={facets.setFilenumbers}
             />
           </Stack>
 
