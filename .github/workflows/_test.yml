@@ -52,4 +52,5 @@ jobs:
         uses: codecov/codecov-action@v7
         with:
           name: ${{ inputs.python-version }}/${{ inputs.runs-on }}
+          flags: python
           files: cov.xml

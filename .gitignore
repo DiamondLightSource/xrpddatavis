@@ -81,4 +81,5 @@ lockfiles/
 # committed, the same way a Python sdist doesn't commit compiled bytecode.
 frontend/node_modules/
 frontend/*.tsbuildinfo
+frontend/coverage/
 /src/xrpddatavis/static/

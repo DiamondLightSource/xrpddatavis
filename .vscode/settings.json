@@ -9,4 +9,6 @@
     "[python]": {
         "editor.defaultFormatter": "charliermarsh.ruff",
     },
+    // the frontend's eslint.config.js lives in frontend/, not the repo root
+    "eslint.workingDirectories": ["frontend"],
 }
