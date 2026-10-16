@@ -75,5 +75,54 @@ def serve(ctx: click.Context):
     )
 
 
+# frontend/ only exists in a source checkout (it isn't shipped in the wheel)
+DEFAULT_FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
+
+
+@main.command(name="build")
+@click.option(
+    "--frontend-dir",
+    type=click.Path(path_type=Path, file_okay=False),
+    default=DEFAULT_FRONTEND_DIR,
+    show_default=True,
+    help="Path to the frontend source directory",
+)
+@click.option(
+    "--install/--no-install",
+    default=True,
+    show_default=True,
+    help="Run 'npm ci' before building",
+)
+def build(frontend_dir: Path, install: bool):
+    """Rebuild the web frontend into the package's static/ directory."""
+
+    import shutil
+    import subprocess
+
+    if not (frontend_dir / "package.json").is_file():
+        raise click.ClickException(
+            f"No package.json in {frontend_dir} - build needs a source checkout, "
+            "or pass --frontend-dir"
+        )
+
+    npm = shutil.which("npm")
+    if npm is None:
+        raise click.ClickException("npm not found on PATH")
+
+    steps = [["ci"]] if install else []
+    steps.append(["run", "build"])
+
+    for args in steps:
+        label = " ".join(["npm", *args])
+        click.echo(f"Running '{label}' in {frontend_dir}")
+        result = subprocess.run([npm, *args], cwd=frontend_dir)
+        if result.returncode != 0:
+            raise click.ClickException(
+                f"'{label}' failed with exit code {result.returncode}"
+            )
+
+    click.echo("Frontend built")
+
+
 if __name__ == "__main__":
     main()
