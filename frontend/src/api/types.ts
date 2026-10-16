@@ -6,8 +6,8 @@ export type PlotKind = "scatter" | "line" | "line+markers";
 export type KnownDataType = "pxrd" | "gr" | "fq" | "sq" | "iq";
 export type DataType = KnownDataType | (string & {});
 
-/** A single 1D trace: x, y and optional y errors. Pure data - no plotting
- * or provenance metadata (mirrors XYEData). Not sent over the wire on its
+/** A single 1D trace: x, y, optional y errors and the file it came from.
+ * No plotting metadata (mirrors XYEData). Not sent over the wire on its
  * own - see DataPlot/FittedDataPlot, which extend it with what a POST to
  * /plot actually needs. */
 export interface XYEData {
@@ -15,12 +15,12 @@ export interface XYEData {
   x: number[];
   y: number[];
   e: number[] | null;
+  filepath: string | null;
 }
 
 /** An XYEData trace plus everything needed to plot and locate it - what
  * actually gets drawn (mirrors DataPlot). */
 export interface DataPlot extends XYEData {
-  filepath: string | null;
   filenumber: number | null;
   /** Explicit override - usually unset and derived from filepath instead. */
   instrument_session: string | null;
