@@ -64,10 +64,15 @@ def test_dataplot_get_instrument_session_is_none_without_a_usable_filepath():
     )
 
 
-def test_xyedata_has_no_plotting_or_provenance_fields():
+def test_xyedata_has_no_plotting_fields():
     data = XYEData(title="n", x=[1.0], y=[1.0])
-    assert not hasattr(data, "filepath")
     assert not hasattr(data, "plot_type")
+
+
+def test_xyedata_carries_filepath():
+    assert XYEData(title="n", x=[1.0], y=[1.0]).filepath is None
+    data = XYEData(title="n", x=[1.0], y=[1.0], filepath="/dls/i11/data/a.xye")
+    assert data.filepath == "/dls/i11/data/a.xye"
 
 
 def test_dataplot_defaults_plot_type_and_upsert():

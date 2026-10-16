@@ -87,6 +87,7 @@ class XYEData(BaseModel):
     x: list[float]
     y: list[float]
     e: list[float] | None = None
+    filepath: str | None = None
 
     @model_validator(mode="after")
     def _check_lengths(self) -> Self:
@@ -110,7 +111,6 @@ class DataPlot(XYEData):
     just the numbers.
     """
 
-    filepath: str | None = None
     # explicit override for get_filenumber() - usually left unset and derived
     # from filepath instead
     filenumber: int | None = None
