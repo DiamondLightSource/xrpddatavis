@@ -12,10 +12,13 @@ export default defineConfig({
     emptyOutDir: true,
   },
   test: {
+    environment: "jsdom",
+    setupFiles: ["src/test/setup.ts"],
     coverage: {
       provider: "v8",
       include: ["src/**/*.{ts,tsx}"],
-      exclude: ["src/**/*.test.ts", "src/**/*.d.ts"],
+      // main.tsx only mounts <App /> into the page
+      exclude: ["src/**/*.test.{ts,tsx}", "src/**/*.d.ts", "src/test/**", "src/main.tsx"],
       // lcov is what the CI Codecov upload reads (.github/workflows/_test.yml)
       reporter: ["text", "lcov"],
     },
