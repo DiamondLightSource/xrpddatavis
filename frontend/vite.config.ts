@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
 // Builds straight into the Python package's static/ directory, so the
@@ -10,6 +10,15 @@ export default defineConfig({
   build: {
     outDir: "../src/xrpddatavis/static",
     emptyOutDir: true,
+  },
+  test: {
+    coverage: {
+      provider: "v8",
+      include: ["src/**/*.{ts,tsx}"],
+      exclude: ["src/**/*.test.ts", "src/**/*.d.ts"],
+      // lcov is what the CI Codecov upload reads (.github/workflows/_test.yml)
+      reporter: ["text", "lcov"],
+    },
   },
   server: {
     // proxy API calls to a locally running `xrpddatavis serve` during `npm run dev`

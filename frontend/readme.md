@@ -69,6 +69,18 @@ building a Python sdist/wheel by hand; CI and the Dockerfile both do this
 automatically as part of testing/packaging/the image build, so this is only
 something you run yourself for local dev.
 
+## Test
+
+```sh
+npm test           # vitest, once
+npm run coverage   # same, plus a coverage report in coverage/
+```
+
+Tests sit next to the module they cover (`src/*.test.ts`). CI
+(`.github/workflows/_frontend.yml`) runs lint, typecheck and `npm run
+coverage`, then uploads `coverage/lcov.info` to Codecov under the `frontend`
+flag.
+
 ## Notable choices
 
 * **Plotly is loaded from cdnjs as a global** (see `index.html`), not bundled
