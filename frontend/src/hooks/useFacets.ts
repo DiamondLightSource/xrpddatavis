@@ -2,7 +2,6 @@ import { useEffect, useMemo } from "react";
 import type { PlotSummary } from "../api/types";
 import { usePersistentState } from "./usePersistentState";
 
-export const ALL = "__all__";
 export const UNTYPED = "__untyped__";
 
 export interface TypeOption {
