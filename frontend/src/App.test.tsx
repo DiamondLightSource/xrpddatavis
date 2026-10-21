@@ -117,6 +117,23 @@ describe("App", () => {
     expect(typeFacet()).toHaveTextContent("GR, PXRD");
   });
 
+  it("filters by status and clears it with the other filters", async () => {
+    vi.mocked(api.liveplots).mockResolvedValue({
+      plots: [{ ...plots[0], pinned: true }, plots[1]],
+      max_plots: 10,
+      ttl_seconds: 3600,
+      revision: 1,
+    });
+    await renderApp();
+
+    await pickFacet(/^Show$/, /Unpinned/);
+    expect(status()).toHaveTextContent("1 of 2 plots");
+    expect(screen.queryByText("Alpha")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(screen.getByText("Alpha")).toBeInTheDocument();
+  });
+
   it("deletes everything after confirming", async () => {
     await renderApp();
     await userEvent.click(screen.getByRole("button", { name: "More list actions" }));

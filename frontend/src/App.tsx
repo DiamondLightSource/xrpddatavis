@@ -233,6 +233,9 @@ export default function App() {
               filenumberOptions={facets.filenumberOptions}
               filenumbers={facets.filenumbers}
               onFilenumbersChange={facets.setFilenumbers}
+              statusOptions={facets.statusOptions}
+              status={facets.status}
+              onStatusChange={facets.setStatus}
             />
           </Stack>
 
