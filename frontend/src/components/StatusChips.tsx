@@ -1,4 +1,4 @@
-import { Box, Chip, Stack, Tooltip } from "@mui/material";
+import { Box, Chip, Stack, Tooltip, Typography } from "@mui/material";
 import type { ConnectionState } from "../hooks/useLivePlots";
 import { fmtDuration } from "../format";
 
@@ -52,20 +52,24 @@ interface PlotCapacityProps {
   ttlSeconds: number;
 }
 
+/** Server-side limits as plain text: they are context, not something to act
+ * on, so they shouldn't compete with the controls above them. */
 export function PlotCapacity({ held, maxPlots, ttlSeconds }: PlotCapacityProps) {
   const full = maxPlots > 0 && held >= maxPlots;
   return (
-    <Stack direction="row" spacing={1} alignItems="center">
+    <Stack direction="row" spacing={0.75} alignItems="center">
       <Tooltip title="The server holds at most this many plots; the oldest is dropped to make room.">
-        <Chip
-          size="small"
-          variant="outlined"
-          color={full ? "warning" : "default"}
-          label={`${held} / ${maxPlots || "—"} plots`}
-        />
+        <Typography variant="meta" sx={{ color: full ? "warning.main" : "text.secondary" }}>
+          {`${held} / ${maxPlots || "—"} plots`}
+        </Typography>
       </Tooltip>
+      <Typography variant="meta" aria-hidden sx={{ color: "text.muted" }}>
+        ·
+      </Typography>
       <Tooltip title="Plots are cleared automatically this long after arriving (pinned plots are exempt).">
-        <Chip size="small" variant="outlined" label={`ttl ${ttlSeconds ? fmtDuration(ttlSeconds) : "—"}`} />
+        <Typography variant="meta" sx={{ color: "text.secondary" }}>
+          {`ttl ${ttlSeconds ? fmtDuration(ttlSeconds) : "—"}`}
+        </Typography>
       </Tooltip>
     </Stack>
   );

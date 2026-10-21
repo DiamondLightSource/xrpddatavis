@@ -36,7 +36,8 @@ async function pickFacet(name: RegExp, option: RegExp) {
   await userEvent.keyboard("{Escape}"); // the open menu hides the rest of the page
 }
 
-const status = () => screen.getByText(/on chart/);
+const status = () => screen.getByText(/plots · \d+ selected/);
+const selection = () => screen.getByRole("checkbox", { name: "Select all listed plots" });
 
 async function renderApp() {
   renderWithTheme(<App />);
@@ -48,7 +49,7 @@ describe("App", () => {
     await renderApp();
     expect(await screen.findByText("I11")).toBeInTheDocument();
     expect(screen.getByText("Beta")).toBeInTheDocument();
-    expect(status()).toHaveTextContent("2 plots · 1 on chart");
+    expect(status()).toHaveTextContent("2 plots · 1 selected");
     expect(screen.getByText("2 / 10 plots")).toBeInTheDocument();
     expect(screen.getByText(/^updated /)).toBeInTheDocument();
   });
@@ -73,35 +74,37 @@ describe("App", () => {
 
   it("keeps a cleared selection cleared when the list refreshes", async () => {
     await renderApp();
-    await userEvent.click(screen.getByRole("button", { name: "Clear selection" }));
-    expect(status()).toHaveTextContent("0 on chart");
+    await userEvent.click(selection());
+    expect(status()).toHaveTextContent("0 selected");
     expect(localStorage.getItem("xrpddatavis.selected")).toBe("[]");
   });
 
   it("puts a ticked plot on the chart and clears the selection", async () => {
     await renderApp();
     await userEvent.click(screen.getByRole("checkbox", { name: "Show Alpha" }));
-    expect(status()).toHaveTextContent("2 on chart");
+    expect(status()).toHaveTextContent("2 selected");
 
-    await userEvent.click(screen.getByRole("button", { name: "Clear selection" }));
-    expect(status()).toHaveTextContent("0 on chart");
+    await userEvent.click(selection());
+    expect(status()).toHaveTextContent("0 selected");
   });
 
   it("filters by search text and facets, then resets", async () => {
     await renderApp();
 
     await userEvent.type(screen.getByRole("searchbox"), "alpha");
-    expect(status()).toHaveTextContent("1 of 2 plots · 1 on chart (1 hidden by filters)");
+    expect(status()).toHaveTextContent("1 of 2 plots · 1 selected (1 hidden)");
     expect(screen.queryByText("Beta")).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Clear filters" }));
-    expect(status()).toHaveTextContent("2 plots");
+    expect(status()).toHaveTextContent("2 plots · ");
+    expect(status()).not.toHaveTextContent("of 2");
 
     await pickFacet(/Filter by data type/, /GR/);
     expect(status()).toHaveTextContent("1 of 2 plots");
 
     await userEvent.click(screen.getByRole("button", { name: "Clear filters" }));
-    expect(status()).toHaveTextContent("2 plots");
+    expect(status()).toHaveTextContent("2 plots · ");
+    expect(status()).not.toHaveTextContent("of 2");
     expect(typeFacet()).toHaveTextContent("All");
   });
 
@@ -117,7 +120,7 @@ describe("App", () => {
     expect(typeFacet()).toHaveTextContent("GR, PXRD");
   });
 
-  it("filters by status and clears it with the other filters", async () => {
+  it("sorts the cards from the dropdown, and filters by status", async () => {
     vi.mocked(api.liveplots).mockResolvedValue({
       plots: [{ ...plots[0], pinned: true }, plots[1]],
       max_plots: 10,
@@ -125,13 +128,19 @@ describe("App", () => {
       revision: 1,
     });
     await renderApp();
+    const names = () => screen.getAllByRole("listitem").map((li) => li.querySelector("p")?.textContent);
+    expect(names()).toEqual(["Beta", "Alpha"]);
+
+    await userEvent.click(screen.getByRole("combobox", { name: /Sort plots/ }));
+    await userEvent.click(screen.getByRole("option", { name: "Name A–Z" }));
+    expect(names()).toEqual(["Alpha", "Beta"]);
 
     await pickFacet(/^Show$/, /Unpinned/);
     expect(status()).toHaveTextContent("1 of 2 plots");
-    expect(screen.queryByText("Alpha")).not.toBeInTheDocument();
+    expect(names()).toEqual(["Beta"]);
 
     await userEvent.click(screen.getByRole("button", { name: "Clear filters" }));
-    expect(screen.getByText("Alpha")).toBeInTheDocument();
+    expect(names()).toEqual(["Alpha", "Beta"]);
   });
 
   it("deletes everything after confirming", async () => {
