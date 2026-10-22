@@ -13,11 +13,17 @@ const filenumberOptions = [
   { value: "1", label: "#1", count: 2 },
   { value: "2", label: "#2", count: 1 },
 ];
+const statusOptions = [
+  { value: "all", label: "All", count: 3 },
+  { value: "pinned", label: "Pinned", count: 1 },
+  { value: "fit", label: "With fit", count: 2 },
+];
 const letters = ["a", "b", "c", "d"].map((v) => ({ value: v, label: v.toUpperCase(), count: 1 }));
 
 function setup(props: Partial<ComponentProps<typeof Facets>> = {}) {
   const onTypesChange = vi.fn();
   const onFilenumbersChange = vi.fn();
+  const onStatusChange = vi.fn();
   renderWithTheme(
     <Facets
       typeOptions={typeOptions}
@@ -26,13 +32,17 @@ function setup(props: Partial<ComponentProps<typeof Facets>> = {}) {
       filenumberOptions={filenumberOptions}
       filenumbers={[]}
       onFilenumbersChange={onFilenumbersChange}
+      statusOptions={statusOptions}
+      status="all"
+      onStatusChange={onStatusChange}
       {...props}
     />,
   );
-  return { onTypesChange, onFilenumbersChange };
+  return { onTypesChange, onFilenumbersChange, onStatusChange };
 }
 
 const typeSelect = () => screen.getByRole("combobox", { name: /Filter by data type/ });
+const statusSelect = () => screen.getByRole("combobox", { name: "Show" });
 const fileSelect = () => screen.getByRole("combobox", { name: /Filter by file number/ });
 
 describe("Facets", () => {
@@ -106,5 +116,30 @@ describe("Facets", () => {
     expect(fileSelect()).toHaveAttribute("aria-disabled", "true");
     expect(fileSelect()).toHaveTextContent("#7");
     expect(typeSelect()).not.toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("picks one status at a time, with counts in the menu", async () => {
+    const { onStatusChange } = setup();
+    expect(statusSelect()).toHaveTextContent("All");
+
+    await userEvent.click(statusSelect());
+    expect(within(screen.getByRole("listbox")).getAllByRole("option").map((o) => o.textContent)).toEqual([
+      "All3",
+      "Pinned1",
+      "With fit2",
+    ]);
+
+    await userEvent.click(screen.getByRole("option", { name: /With fit/ }));
+    expect(onStatusChange).toHaveBeenCalledWith("fit");
+  });
+
+  it("shows only the label of the chosen status, without its count", () => {
+    setup({ status: "pinned" });
+    expect(statusSelect()).toHaveTextContent(/^Pinned$/);
+  });
+
+  it("disables the status filter when there is only All to pick", () => {
+    setup({ statusOptions: [{ value: "all", label: "All", count: 2 }] });
+    expect(statusSelect()).toHaveAttribute("aria-disabled", "true");
   });
 });

@@ -16,17 +16,35 @@ export interface FilenumberOption {
   count: number;
 }
 
+export const ALL_STATUS = "all";
+
+const STATUS_FILTERS = [
+  { value: "pinned", label: "Pinned", test: (p: PlotSummary) => p.pinned },
+  { value: "unpinned", label: "Unpinned", test: (p: PlotSummary) => !p.pinned },
+  { value: "errors", label: "With errors", test: (p: PlotSummary) => p.has_errors },
+  { value: "fit", label: "With fit", test: (p: PlotSummary) => p.has_fit },
+] as const;
+
+export interface StatusOption {
+  value: string;
+  label: string;
+  count: number;
+}
+
 /**
  * Type and file-number filters for the sidebar, computed from whatever
  * plots are actually live - an option only exists while at least one plot
  * needs it. Both are multi-select; an empty selection means "all". File
  * numbers are scoped to the selected types, so changing type shows only the
  * file numbers relevant to it - a file number that is still offered stays
- * selected, so "file 1" can be combined with any type.
+ * selected, so "file 1" can be combined with any type. The status filter
+ * (pinned, errors, fit) is single-choice and narrows what the other two
+ * have already left.
  */
 export function useFacets(plots: PlotSummary[]) {
   const [dataTypes, setDataTypes] = usePersistentState<string[]>("facetDataTypes", []);
   const [filenumbers, setFilenumbers] = usePersistentState<string[]>("facetFilenumbers", []);
+  const [status, setStatus] = usePersistentState<string>("facetStatus", ALL_STATUS);
 
   const typeOptions = useMemo<TypeOption[]>(() => {
     const counts = new Map<string, number>();
@@ -76,7 +94,7 @@ export function useFacets(plots: PlotSummary[]) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filenumberOptions]);
 
-  const visible = useMemo(
+  const byFilenumber = useMemo(
     () =>
       filenumbers.length === 0
         ? byType
@@ -84,9 +102,29 @@ export function useFacets(plots: PlotSummary[]) {
     [byType, filenumbers],
   );
 
+  const statusOptions = useMemo<StatusOption[]>(() => {
+    const options: StatusOption[] = [{ value: ALL_STATUS, label: "All", count: byFilenumber.length }];
+    for (const { value, label, test } of STATUS_FILTERS) {
+      const count = byFilenumber.filter(test).length;
+      if (count) options.push({ value, label, count });
+    }
+    return options;
+  }, [byFilenumber]);
+
+  useEffect(() => {
+    if (!statusOptions.some((o) => o.value === status)) setStatus(ALL_STATUS);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusOptions]);
+
+  const visible = useMemo(() => {
+    const filter = STATUS_FILTERS.find((f) => f.value === status);
+    return filter ? byFilenumber.filter(filter.test) : byFilenumber;
+  }, [byFilenumber, status]);
+
   const reset = () => {
     setDataTypes([]);
     setFilenumbers([]);
+    setStatus(ALL_STATUS);
   };
 
   return {
@@ -94,10 +132,13 @@ export function useFacets(plots: PlotSummary[]) {
     setTypes: setDataTypes,
     filenumbers,
     setFilenumbers,
+    status,
+    setStatus,
     typeOptions,
     filenumberOptions,
+    statusOptions,
     visible,
     reset,
-    isActive: dataTypes.length > 0 || filenumbers.length > 0,
+    isActive: dataTypes.length > 0 || filenumbers.length > 0 || status !== ALL_STATUS,
   };
 }

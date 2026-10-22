@@ -1,7 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { summary } from "../test/fixtures";
-import { UNTYPED, useFacets } from "./useFacets";
+import { ALL_STATUS, UNTYPED, useFacets } from "./useFacets";
 
 const plots = [
   summary("a", { data_type: "pxrd", filenumber: 1 }),
@@ -148,5 +148,78 @@ describe("useFacets", () => {
     expect(result.current.filenumbers).toEqual([]);
     expect(result.current.isActive).toBe(false);
     expect(ids(result.current.visible)).toEqual(["a", "b", "c", "d"]);
+  });
+
+  describe("status", () => {
+    const mixed = [
+      summary("a", { pinned: true, has_errors: true, has_fit: false, filenumber: 1 }),
+      summary("b", { pinned: false, has_errors: false, has_fit: true, filenumber: 1 }),
+      summary("c", { pinned: false, has_errors: true, has_fit: true, filenumber: 2 }),
+    ];
+
+    it("lists only the statuses some plot has, with All first", () => {
+      const { result } = renderHook(() => useFacets(mixed));
+      expect(result.current.statusOptions).toEqual([
+        { value: ALL_STATUS, label: "All", count: 3 },
+        { value: "pinned", label: "Pinned", count: 1 },
+        { value: "unpinned", label: "Unpinned", count: 2 },
+        { value: "errors", label: "With errors", count: 2 },
+        { value: "fit", label: "With fit", count: 2 },
+      ]);
+      expect(result.current.status).toBe(ALL_STATUS);
+      expect(result.current.isActive).toBe(false);
+    });
+
+    it("omits a status nothing has", () => {
+      const { result } = renderHook(() => useFacets([summary("a", { has_errors: false })]));
+      expect(result.current.statusOptions.map((o) => o.value)).toEqual([ALL_STATUS, "unpinned"]);
+    });
+
+    it("filters to one status", () => {
+      const { result } = renderHook(() => useFacets(mixed));
+
+      act(() => result.current.setStatus("fit"));
+      expect(ids(result.current.visible)).toEqual(["b", "c"]);
+      expect(result.current.isActive).toBe(true);
+
+      act(() => result.current.setStatus("pinned"));
+      expect(ids(result.current.visible)).toEqual(["a"]);
+    });
+
+    it("narrows what the type and file number filters leave, and counts only that", () => {
+      const { result } = renderHook(() => useFacets(mixed));
+      act(() => result.current.setFilenumbers(["1"]));
+      expect(result.current.statusOptions.find((o) => o.value === "fit")?.count).toBe(1);
+
+      act(() => result.current.setStatus("fit"));
+      expect(ids(result.current.visible)).toEqual(["b"]);
+    });
+
+    it("falls back to All once no plot has the chosen status", () => {
+      const { result, rerender } = renderHook(({ list }) => useFacets(list), {
+        initialProps: { list: mixed },
+      });
+      act(() => result.current.setStatus("pinned"));
+
+      rerender({ list: mixed.slice(1) });
+
+      expect(result.current.status).toBe(ALL_STATUS);
+      expect(ids(result.current.visible)).toEqual(["b", "c"]);
+    });
+
+    it("ignores a persisted status it does not know", () => {
+      localStorage.setItem("xrpddatavis.facetStatus", JSON.stringify("bogus"));
+      const { result } = renderHook(() => useFacets(mixed));
+      expect(result.current.status).toBe(ALL_STATUS);
+      expect(ids(result.current.visible)).toEqual(["a", "b", "c"]);
+    });
+
+    it("is cleared by reset", () => {
+      const { result } = renderHook(() => useFacets(mixed));
+      act(() => result.current.setStatus("errors"));
+      act(() => result.current.reset());
+      expect(result.current.status).toBe(ALL_STATUS);
+      expect(result.current.isActive).toBe(false);
+    });
   });
 });
