@@ -8,7 +8,12 @@ import App from "./App";
 
 const plots = [
   summary("a", { name: "Alpha", data_type: "pxrd", instrument_session: "cm1-1", filepath: "/data/alpha.xye" }),
-  summary("b", { name: "Beta", data_type: "gr", instrument_session: "cm1-2" }),
+  summary("b", {
+    name: "Beta",
+    data_type: "gr",
+    instrument_session: "cm1-2",
+    created_at: "2026-01-01T00:05:00Z",
+  }),
 ];
 
 beforeEach(() => {
@@ -23,7 +28,16 @@ beforeEach(() => {
   vi.spyOn(api, "post").mockResolvedValue({ id: "new" } as Awaited<ReturnType<typeof api.post>>);
 });
 
-const status = () => screen.getByText(/on chart/);
+const typeFacet = () => screen.getByRole("combobox", { name: /Filter by data type/ });
+
+async function pickFacet(name: RegExp, option: RegExp) {
+  await userEvent.click(screen.getByRole("combobox", { name }));
+  await userEvent.click(screen.getByRole("option", { name: option }));
+  await userEvent.keyboard("{Escape}"); // the open menu hides the rest of the page
+}
+
+const status = () => screen.getByText(/plots · \d+ selected/);
+const selection = () => screen.getByRole("checkbox", { name: "Select all listed plots" });
 
 async function renderApp() {
   renderWithTheme(<App />);
@@ -35,33 +49,98 @@ describe("App", () => {
     await renderApp();
     expect(await screen.findByText("I11")).toBeInTheDocument();
     expect(screen.getByText("Beta")).toBeInTheDocument();
-    expect(status()).toHaveTextContent("2 plots · 0 on chart");
+    expect(status()).toHaveTextContent("2 plots · 1 selected");
     expect(screen.getByText("2 / 10 plots")).toBeInTheDocument();
     expect(screen.getByText(/^updated /)).toBeInTheDocument();
+  });
+
+  it("ticks the newest plot on first load", async () => {
+    await renderApp();
+    expect(screen.getByRole("checkbox", { name: "Show Beta" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Show Alpha" })).not.toBeChecked();
+  });
+
+  it("finds the newest plot wherever it sits in the list", async () => {
+    vi.mocked(api.liveplots).mockResolvedValue({
+      plots: [...plots].reverse(),
+      max_plots: 10,
+      ttl_seconds: 3600,
+      revision: 1,
+    });
+    await renderApp();
+    expect(screen.getByRole("checkbox", { name: "Show Beta" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Show Alpha" })).not.toBeChecked();
+  });
+
+  it("keeps a cleared selection cleared when the list refreshes", async () => {
+    await renderApp();
+    await userEvent.click(selection());
+    expect(status()).toHaveTextContent("0 selected");
+    expect(localStorage.getItem("xrpddatavis.selected")).toBe("[]");
   });
 
   it("puts a ticked plot on the chart and clears the selection", async () => {
     await renderApp();
     await userEvent.click(screen.getByRole("checkbox", { name: "Show Alpha" }));
-    expect(status()).toHaveTextContent("1 on chart");
+    expect(status()).toHaveTextContent("2 selected");
 
-    await userEvent.click(screen.getByRole("button", { name: "Clear selection" }));
-    expect(status()).toHaveTextContent("0 on chart");
+    await userEvent.click(selection());
+    expect(status()).toHaveTextContent("0 selected");
   });
 
   it("filters by search text and facets, then resets", async () => {
     await renderApp();
-    await userEvent.click(screen.getByRole("checkbox", { name: "Show Beta" }));
 
     await userEvent.type(screen.getByRole("searchbox"), "alpha");
-    expect(status()).toHaveTextContent("1 of 2 plots · 1 on chart (1 hidden by filters)");
+    expect(status()).toHaveTextContent("1 of 2 plots · 1 selected (1 hidden)");
     expect(screen.queryByText("Beta")).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Clear filters" }));
-    expect(status()).toHaveTextContent("2 plots");
+    expect(status()).toHaveTextContent("2 plots · ");
+    expect(status()).not.toHaveTextContent("of 2");
 
-    await userEvent.click(screen.getByRole("button", { name: /GR/ }));
+    await pickFacet(/Filter by data type/, /GR/);
     expect(status()).toHaveTextContent("1 of 2 plots");
+
+    await userEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(status()).toHaveTextContent("2 plots · ");
+    expect(status()).not.toHaveTextContent("of 2");
+    expect(typeFacet()).toHaveTextContent("All");
+  });
+
+  it("combines several types in the dropdown", async () => {
+    await renderApp();
+    await pickFacet(/Filter by data type/, /GR/);
+    expect(status()).toHaveTextContent("1 of 2 plots");
+
+    await userEvent.click(screen.getByRole("combobox", { name: /Filter by data type/ }));
+    await userEvent.click(screen.getByRole("option", { name: /PXRD/ }));
+    await userEvent.keyboard("{Escape}");
+    expect(status()).toHaveTextContent("2 plots");
+    expect(typeFacet()).toHaveTextContent("GR, PXRD");
+  });
+
+  it("sorts the cards from the dropdown, and filters by status", async () => {
+    vi.mocked(api.liveplots).mockResolvedValue({
+      plots: [{ ...plots[0], pinned: true }, plots[1]],
+      max_plots: 10,
+      ttl_seconds: 3600,
+      revision: 1,
+    });
+    await renderApp();
+    const names = () => screen.getAllByRole("listitem").map((li) => li.querySelector("p")?.textContent);
+    expect(names()).toEqual(["Beta", "Alpha"]);
+
+    await userEvent.click(screen.getByRole("combobox", { name: /Sort plots/ }));
+    await userEvent.click(screen.getByRole("option", { name: "Name A–Z" }));
+    expect(names()).toEqual(["Alpha", "Beta"]);
+
+    await pickFacet(/^Show$/, /Unpinned/);
+    expect(status()).toHaveTextContent("1 of 2 plots");
+    expect(names()).toEqual(["Beta"]);
+
+    await userEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(names()).toEqual(["Alpha", "Beta"]);
   });
 
   it("deletes everything after confirming", async () => {

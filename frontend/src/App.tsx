@@ -1,12 +1,13 @@
 import { useMemo, useState } from "react";
-import { Alert, Box, Button, Divider, Snackbar, Stack, Typography } from "@mui/material";
+import { Alert, Box, Divider, Snackbar, Stack, Typography } from "@mui/material";
 import { useColorScheme } from "@mui/material/styles";
 import { ColourSchemeButton, Logo, Navbar } from "@diamondlightsource/sci-react-ui";
 import { api, ApiError } from "./api/client";
-import type { PlotRequest } from "./api/types";
+import type { PlotRequest, PlotSummary } from "./api/types";
 import { useLivePlots } from "./hooks/useLivePlots";
 import { useSelection } from "./hooks/useSelection";
 import { useFacets } from "./hooks/useFacets";
+import { usePlotSort } from "./hooks/usePlotSort";
 import { ALL_SESSIONS, useInstrumentSessionFilter } from "./hooks/useInstrumentSessionFilter";
 import { useAppInfo } from "./hooks/useAppInfo";
 import { usePersistentState } from "./hooks/usePersistentState";
@@ -17,7 +18,7 @@ import { ListToolbar } from "./components/ListToolbar";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { SessionSelect } from "./components/SessionSelect";
 import { Facets } from "./components/Facets";
-import { PlotTable } from "./components/PlotTable";
+import { PlotList } from "./components/PlotList";
 import { ChartPanel } from "./components/ChartPanel";
 import { UploadDialog } from "./components/UploadDialog";
 import type { ChartOptions, LayoutMode } from "./chartBuilder";
@@ -35,7 +36,18 @@ const DEFAULT_OPTIONS: ChartOptions = {
 export default function App() {
   const { plots, limits, connection, error: liveError, updatedAt, refresh } = useLivePlots();
   const liveIds = useMemo(() => plots.map((p) => p.id), [plots]);
-  const { selected, toggle, selectMany, deselectMany, clear: clearSelection } = useSelection(liveIds);
+  const newestId = useMemo(
+    () =>
+      plots.reduce<PlotSummary | null>(
+        (best, p) => (best === null || p.created_at > best.created_at ? p : best),
+        null,
+      )?.id ?? null,
+    [plots],
+  );
+  const { selected, toggle, selectMany, deselectMany } = useSelection(
+    liveIds,
+    newestId,
+  );
   const sessionFilter = useInstrumentSessionFilter(plots);
   const facets = useFacets(sessionFilter.filtered);
   const { beamline } = useAppInfo();
@@ -61,16 +73,15 @@ export default function App() {
     );
   }, [facets.visible, needle]);
 
+  const sort = usePlotSort(visiblePlots);
+
   const filtersActive =
     facets.isActive || needle !== "" || sessionFilter.session !== ALL_SESSIONS;
-  const visibleIds = useMemo(() => new Set(visiblePlots.map((p) => p.id)), [visiblePlots]);
   const selectedSet = useMemo(() => new Set(selected), [selected]);
   const selectedSummaries = useMemo(
     () => plots.filter((p) => selectedSet.has(p.id)),
     [plots, selectedSet],
   );
-
-  const hiddenSelected = selected.filter((id) => !visibleIds.has(id)).length;
 
   const emptyMessage = plots.length
     ? "No plots match the current filters."
@@ -85,8 +96,7 @@ export default function App() {
 
   const resetFilters = () => {
     setFilterText("");
-    facets.setType("__all__");
-    facets.setFilenumber("__all__");
+    facets.reset();
     sessionFilter.setSession(ALL_SESSIONS);
   };
 
@@ -218,42 +228,19 @@ export default function App() {
             />
             <Facets
               typeOptions={facets.typeOptions}
-              dataType={facets.dataType}
-              onTypeChange={facets.setType}
+              dataTypes={facets.dataTypes}
+              onTypesChange={facets.setTypes}
               filenumberOptions={facets.filenumberOptions}
-              filenumber={facets.filenumber}
-              onFilenumberChange={facets.setFilenumber}
+              filenumbers={facets.filenumbers}
+              onFilenumbersChange={facets.setFilenumbers}
+              statusOptions={facets.statusOptions}
+              status={facets.status}
+              onStatusChange={facets.setStatus}
             />
           </Stack>
 
-          <Stack
-            direction="row"
-            alignItems="center"
-            justifyContent="space-between"
-            useFlexGap
-            sx={{ px: 1.5, py: 0.5, minHeight: 36, flexWrap: "wrap", columnGap: 1, borderBottom: 1, borderColor: "divider" }}
-          >
-            <Typography variant="meta" role="status" sx={{ color: "text.secondary" }}>
-              {filtersActive ? `${visiblePlots.length} of ${plots.length} plots` : `${plots.length} plots`} ·{" "}
-              {selected.length} on chart
-              {hiddenSelected > 0 ? ` (${hiddenSelected} hidden by filters)` : ""}
-            </Typography>
-            <Stack direction="row" spacing={0.5}>
-              {selected.length > 0 && (
-                <Button size="small" color="inherit" onClick={clearSelection}>
-                  Clear selection
-                </Button>
-              )}
-              {filtersActive && (
-                <Button size="small" color="inherit" onClick={resetFilters}>
-                  Clear filters
-                </Button>
-              )}
-            </Stack>
-          </Stack>
-
-          <PlotTable
-            plots={visiblePlots}
+          <PlotList
+            plots={sort.sorted}
             selected={selected}
             onToggle={toggle}
             onSelectAll={selectMany}
@@ -262,6 +249,11 @@ export default function App() {
             onTogglePin={handleTogglePin}
             onCycleColour={handleCycleColour}
             onRename={handleRename}
+            totalCount={plots.length}
+            filtersActive={filtersActive}
+            onClearFilters={resetFilters}
+            sortOrder={sort.order}
+            onSortOrderChange={sort.setOrder}
             ttlSeconds={limits.ttl_seconds}
             emptyMessage={emptyMessage}
           />

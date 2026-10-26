@@ -78,6 +78,7 @@ export function ListToolbar({
       </Button>
       <Tooltip title="More list actions">
         <IconButton
+          size="small"
           aria-label="More list actions"
           aria-haspopup="menu"
           aria-expanded={anchor ? true : undefined}

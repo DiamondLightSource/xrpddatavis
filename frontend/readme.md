@@ -17,7 +17,7 @@ follows, from the design system's own docs:
   feedback/error guidance.
 * Foundations → [Typography](https://diamondlightsource.github.io/sci-react-ui/?path=/docs/foundations-typography--docs) -
   `mono1`/`mono2`/`mono3` for technical values (IDs, timestamps, numeric
-  columns, file paths - see `PlotTable.tsx`, `Facets.tsx`, `UploadDialog.tsx`),
+  columns, file paths - see `PlotList.tsx`, `Facets.tsx`, `UploadDialog.tsx`),
   `meta` for operational status text (see the sidebar footer and
   `StatusChips.tsx`), `overline` for grouping labels (`Facets.tsx`).
 * Foundations → [Icons](https://diamondlightsource.github.io/sci-react-ui/?path=/docs/foundations-icons--docs) -
