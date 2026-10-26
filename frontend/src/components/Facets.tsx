@@ -1,5 +1,5 @@
 import { Checkbox, ListItemText, MenuItem, Stack, TextField, Typography } from "@mui/material";
-import type { FilenumberOption, TypeOption } from "../hooks/useFacets";
+import type { FilenumberOption, StatusOption, TypeOption } from "../hooks/useFacets";
 
 interface FacetSelectProps<T extends { value: string; label: string; count: number }> {
   label: string;
@@ -70,6 +70,43 @@ function FacetSelect<T extends { value: string; label: string; count: number }>(
   );
 }
 
+interface StatusSelectProps {
+  options: StatusOption[];
+  value: string;
+  onChange: (value: string) => void;
+}
+
+/** Single-choice: pinned, unpinned, errors and fit overlap, so a multi-select
+ * would have to pick between "any of" and "all of". */
+function StatusSelect({ options, value, onChange }: StatusSelectProps) {
+  return (
+    <TextField
+      select
+      size="small"
+      label="Show"
+      disabled={options.length < 2}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      sx={{ flex: 1, minWidth: 0 }}
+      slotProps={{
+        inputLabel: { shrink: true },
+        // a single select otherwise shows the whole selected item, which
+        // would wrap inside the field
+        select: { renderValue: (selected) => options.find((o) => o.value === selected)?.label ?? String(selected) },
+      }}
+    >
+      {options.map((option) => (
+        <MenuItem key={option.value} value={option.value} dense>
+          <ListItemText primary={option.label} />
+          <Typography component="span" variant="mono3" sx={{ ml: 1, opacity: 0.6 }}>
+            {option.count}
+          </Typography>
+        </MenuItem>
+      ))}
+    </TextField>
+  );
+}
+
 interface FacetsProps {
   typeOptions: TypeOption[];
   dataTypes: string[];
@@ -77,9 +114,13 @@ interface FacetsProps {
   filenumberOptions: FilenumberOption[];
   filenumbers: string[];
   onFilenumbersChange: (value: string[]) => void;
+  statusOptions: StatusOption[];
+  status: string;
+  onStatusChange: (value: string) => void;
 }
 
-/** Type and file-number filters as two multi-select dropdowns on one row. */
+/** Type and file-number filters as multi-select dropdowns, plus a
+ * single-choice status filter, all on one row. */
 export function Facets({
   typeOptions,
   dataTypes,
@@ -87,6 +128,9 @@ export function Facets({
   filenumberOptions,
   filenumbers,
   onFilenumbersChange,
+  statusOptions,
+  status,
+  onStatusChange,
 }: FacetsProps) {
   return (
     <Stack direction="row" spacing={1}>
@@ -106,6 +150,7 @@ export function Facets({
         onChange={onFilenumbersChange}
         ariaLabel="Filter by file number"
       />
+      <StatusSelect options={statusOptions} value={status} onChange={onStatusChange} />
     </Stack>
   );
 }
