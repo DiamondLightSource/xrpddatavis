@@ -35,6 +35,10 @@ class PlotsConfig(BaseModel):
     # oversized POST exhausting the server's memory
     max_points: int = Field(default=1_000_000, ge=1)
 
+    # sqlite file the plots are kept in, so they survive a restart. Use
+    # ":memory:" to keep them in memory only.
+    db_path: str = "plots.db"
+
 
 class CleanupConfig(BaseModel):
     # how frequently the cleanup job actually runs

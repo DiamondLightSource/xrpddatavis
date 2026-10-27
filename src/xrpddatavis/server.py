@@ -34,7 +34,7 @@ from xrpddatavis.models import (
     PlotSummary,
     PlotUpdate,
 )
-from xrpddatavis.store import ResultStore
+from xrpddatavis.store import PlotStore
 
 ROUTER = APIRouter()
 
@@ -46,7 +46,7 @@ EVENT_POLL_SECONDS = 0.5
 EVENT_KEEPALIVE_SECONDS = 15.0
 
 
-def get_store(request: Request) -> ResultStore:
+def get_store(request: Request) -> PlotStore:
     return request.app.state.store
 
 
@@ -228,7 +228,7 @@ async def ui() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
 
 
-async def _cleanup_loop(store: ResultStore, interval_seconds: int) -> None:
+async def _cleanup_loop(store: PlotStore, interval_seconds: int) -> None:
     """Drop expired plots on a schedule, as well as lazily on every read."""
     while True:
         try:
@@ -244,10 +244,11 @@ async def _cleanup_loop(store: ResultStore, interval_seconds: int) -> None:
 async def lifespan(app: FastAPI):
     config: Config = app.state.config
     logger.info(
-        "xrpddatavis started: %s (max_plots=%d, ttl=%ds)",
+        "xrpddatavis started: %s (max_plots=%d, ttl=%ds, db=%s)",
         __version__,
         config.plots.max_plots,
         config.plots.ttl_seconds,
+        config.plots.db_path,
     )
 
     cleanup = asyncio.create_task(
@@ -262,6 +263,7 @@ async def lifespan(app: FastAPI):
     except asyncio.CancelledError:
         pass
 
+    app.state.store.close()
     logger.info("Shutting down")
 
 
@@ -282,9 +284,10 @@ def start_api(config: Config | None = None) -> FastAPI:
         suppress_polling_logs([HEALTH_ROUTE, LIVEPLOTS, EVENTS])
 
     app.state.config = config
-    app.state.store = ResultStore(
+    app.state.store = PlotStore(
         ttl_seconds=config.plots.ttl_seconds,
         max_plots=config.plots.max_plots,
+        db_path=config.plots.db_path,
     )
 
     app.include_router(ROUTER)
