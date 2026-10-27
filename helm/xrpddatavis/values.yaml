@@ -80,6 +80,7 @@ config:
     ttl_seconds: 3600
     # largest single trace accepted by POST /plot
     max_points: 1000000
+    db_path: /data/results.db # on the PVC, keep in sync with persistence.mountPath
   cleanup:
     # how often expired plots are swept up
     interval_seconds: 300
