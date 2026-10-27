@@ -7,6 +7,12 @@ from xrpddatavis.config import Config
 from xrpddatavis.endpoints import AUTHORISE, LOGOUT, PROTECTED, TOKEN
 
 
+class User(BaseModel):
+    fedid: str
+    email: str | None = None
+    name: str | None = None
+
+
 class Unauthorised(BaseModel):
     detail: str
 

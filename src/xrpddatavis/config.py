@@ -41,10 +41,15 @@ class PlotsConfig(BaseModel):
 
 
 class AuthConfig(BaseModel):
-    endpoint: str
+    well_known_url: str = (
+        "https://identity.diamond.ac.uk/realms/dls/.well-known/openid-configuration"
+    )
     client_id: str
     client_secret: str
     cookie_key: str
+
+    client_audience: str = "account"
+    logout_redirect_endpoint: str = "oauth2/sign_out"
 
 
 class CleanupConfig(BaseModel):
