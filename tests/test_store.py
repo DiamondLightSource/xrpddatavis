@@ -1,3 +1,4 @@
+from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
@@ -14,6 +15,26 @@ from xrpddatavis.models import (
 from xrpddatavis.store import PALETTE_SLOTS, PlotStore
 
 
+@pytest.fixture
+def make_store() -> Iterator[Callable[..., PlotStore]]:
+    """Build PlotStores that are closed when the test ends.
+
+    Python 3.13+ raises a ResourceWarning for a sqlite connection that is
+    garbage collected while still open, which our filterwarnings turns into
+    an error.
+    """
+    stores: list[PlotStore] = []
+
+    def make(**kwargs) -> PlotStore:
+        store = PlotStore(**kwargs)
+        stores.append(store)
+        return store
+
+    yield make
+    for store in stores:
+        store.close()
+
+
 def plot(title: str, age_seconds: float = 0.0, pinned: bool = False) -> PlotData:
     created = datetime.now(UTC) - timedelta(seconds=age_seconds)
     return PlotData(
@@ -23,8 +44,8 @@ def plot(title: str, age_seconds: float = 0.0, pinned: bool = False) -> PlotData
     )
 
 
-def test_add_evicts_oldest_beyond_max_plots():
-    store = PlotStore(ttl_seconds=600, max_plots=2)
+def test_add_evicts_oldest_beyond_max_plots(make_store):
+    store = make_store(ttl_seconds=600, max_plots=2)
     oldest = store.add(plot("a", age_seconds=10))[0]
     store.add(plot("b", age_seconds=5))
     _, evicted = store.add(plot("c"))
@@ -33,8 +54,8 @@ def test_add_evicts_oldest_beyond_max_plots():
     assert {item.data.title for item in store.list()} == {"b", "c"}
 
 
-def test_colour_slots_are_reused_once_freed():
-    store = PlotStore(ttl_seconds=600, max_plots=10)
+def test_colour_slots_are_reused_once_freed(make_store):
+    store = make_store(ttl_seconds=600, max_plots=10)
     first = store.add(plot("a"))[0]
     second = store.add(plot("b"))[0]
     assert (first.colour_index, second.colour_index) == (0, 1)
@@ -44,15 +65,15 @@ def test_colour_slots_are_reused_once_freed():
     assert third.colour_index == 0
 
 
-def test_colour_slots_wrap_when_the_palette_is_full():
-    store = PlotStore(ttl_seconds=600, max_plots=PALETTE_SLOTS + 2)
+def test_colour_slots_wrap_when_the_palette_is_full(make_store):
+    store = make_store(ttl_seconds=600, max_plots=PALETTE_SLOTS + 2)
     slots = [store.add(plot(f"p{i}"))[0].colour_index for i in range(PALETTE_SLOTS + 1)]
     assert sorted(slots[:PALETTE_SLOTS]) == list(range(PALETTE_SLOTS))
     assert 0 <= slots[-1] < PALETTE_SLOTS
 
 
-def test_upsert_keeps_id_and_colour_and_bumps_version():
-    store = PlotStore(ttl_seconds=600, max_plots=5)
+def test_upsert_keeps_id_and_colour_and_bumps_version(make_store):
+    store = make_store(ttl_seconds=600, max_plots=5)
     store.add(plot("filler"))
     original = store.upsert(plot("scan"))[0]
 
@@ -68,8 +89,8 @@ def test_upsert_keeps_id_and_colour_and_bumps_version():
     assert len(store.list()) == 2
 
 
-def test_purge_expired():
-    store = PlotStore(ttl_seconds=30, max_plots=5)
+def test_purge_expired(make_store):
+    store = make_store(ttl_seconds=30, max_plots=5)
     store.add(plot("fresh"))
     store.add(plot("stale", age_seconds=60))
 
@@ -77,8 +98,8 @@ def test_purge_expired():
     assert [item.data.title for item in store.list()] == ["fresh"]
 
 
-def test_pinned_plots_do_not_expire():
-    store = PlotStore(ttl_seconds=30, max_plots=5)
+def test_pinned_plots_do_not_expire(make_store):
+    store = make_store(ttl_seconds=30, max_plots=5)
     stale = store.add(plot("stale", age_seconds=60))[0]
     store.update(stale.id, PlotUpdate(pinned=True))
 
@@ -90,8 +111,8 @@ def test_pinned_plots_do_not_expire():
     assert store.list() == []
 
 
-def test_eviction_prefers_unpinned_plots():
-    store = PlotStore(ttl_seconds=600, max_plots=2)
+def test_eviction_prefers_unpinned_plots(make_store):
+    store = make_store(ttl_seconds=600, max_plots=2)
     oldest = store.add(plot("a", age_seconds=10))[0]
     store.update(oldest.id, PlotUpdate(pinned=True))
     store.add(plot("b", age_seconds=5))
@@ -102,8 +123,8 @@ def test_eviction_prefers_unpinned_plots():
     assert {item.data.title for item in store.list()} == {"a", "c"}
 
 
-def test_eviction_falls_back_to_pinned_plots_once_all_are_pinned():
-    store = PlotStore(ttl_seconds=600, max_plots=2)
+def test_eviction_falls_back_to_pinned_plots_once_all_are_pinned(make_store):
+    store = make_store(ttl_seconds=600, max_plots=2)
     store.add(plot("a", age_seconds=10, pinned=True))
     store.add(plot("b", age_seconds=5, pinned=True))
     _, evicted = store.add(plot("c", pinned=True))
@@ -113,8 +134,8 @@ def test_eviction_falls_back_to_pinned_plots_once_all_are_pinned():
     assert {item.data.title for item in store.list()} == {"b", "c"}
 
 
-def test_update_and_revision():
-    store = PlotStore(ttl_seconds=600, max_plots=5)
+def test_update_and_revision(make_store):
+    store = make_store(ttl_seconds=600, max_plots=5)
     stored = store.add(plot("a"))[0]
     before = store.revision
 
@@ -126,8 +147,8 @@ def test_update_and_revision():
     assert store.update("not-a-plot", PlotUpdate(name="x")) is None
 
 
-def test_update_can_set_data_type():
-    store = PlotStore(ttl_seconds=600, max_plots=5)
+def test_update_can_set_data_type(make_store):
+    store = make_store(ttl_seconds=600, max_plots=5)
     stored = store.add(plot("a"))[0]
     assert stored.data.data_type is None
 
@@ -136,46 +157,44 @@ def test_update_can_set_data_type():
     assert updated.data.data_type == "fq"
 
 
-def test_clear():
-    store = PlotStore(ttl_seconds=600, max_plots=5)
+def test_clear(make_store):
+    store = make_store(ttl_seconds=600, max_plots=5)
     store.add(plot("a"))
     store.add(plot("b"))
     assert store.clear() == 2
     assert store.list() == []
 
 
-def test_plots_persist_across_restarts(tmp_path):
+def test_plots_persist_across_restarts(tmp_path, make_store):
     db_path = tmp_path / "nested" / "plots.db"
-    store = PlotStore(ttl_seconds=600, max_plots=5, db_path=db_path)
+    store = make_store(ttl_seconds=600, max_plots=5, db_path=db_path)
     stored = store.add(plot("a"))[0]
     store.update(stored.id, PlotUpdate(pinned=True, name="renamed"))
     store.close()
 
-    reopened = PlotStore(ttl_seconds=600, max_plots=5, db_path=db_path)
+    reopened = make_store(ttl_seconds=600, max_plots=5, db_path=db_path)
     restored = reopened.get(stored.id)
     assert restored is not None
     assert restored.data.title == "renamed"
     assert restored.pinned
     assert restored.colour_index == stored.colour_index
     assert restored.data.x == [1.0, 2.0]
-    reopened.close()
 
 
-def test_ttl_applies_to_plots_restored_after_a_restart(tmp_path):
+def test_ttl_applies_to_plots_restored_after_a_restart(tmp_path, make_store):
     db_path = tmp_path / "plots.db"
-    store = PlotStore(ttl_seconds=30, max_plots=5, db_path=db_path)
+    store = make_store(ttl_seconds=30, max_plots=5, db_path=db_path)
     store.add(plot("stale", age_seconds=60))
     store.add(plot("pinned", age_seconds=60, pinned=True))
     store.add(plot("fresh"))
     store.close()
 
-    reopened = PlotStore(ttl_seconds=30, max_plots=5, db_path=db_path)
+    reopened = make_store(ttl_seconds=30, max_plots=5, db_path=db_path)
     assert {item.data.title for item in reopened.list()} == {"pinned", "fresh"}
-    reopened.close()
 
 
-def test_fitted_plots_round_trip_through_the_db():
-    store = PlotStore(ttl_seconds=600, max_plots=5)
+def test_fitted_plots_round_trip_through_the_db(make_store):
+    store = make_store(ttl_seconds=600, max_plots=5)
     fitted = PlotData(
         data=FittedDataPlot(
             title="fit",
@@ -196,8 +215,8 @@ def test_fitted_plots_round_trip_through_the_db():
     assert restored.data.markers == [1.5]
 
 
-def test_failed_transaction_rolls_back_and_releases_the_lock():
-    store = PlotStore(ttl_seconds=600, max_plots=5)
+def test_failed_transaction_rolls_back_and_releases_the_lock(make_store):
+    store = make_store(ttl_seconds=600, max_plots=5)
     store.add(plot("kept"))
 
     with pytest.raises(RuntimeError), store._transaction() as conn:
@@ -210,16 +229,16 @@ def test_failed_transaction_rolls_back_and_releases_the_lock():
     assert len(store.list()) == 2
 
 
-def test_get_returns_none_for_unknown_and_expired_plots():
-    store = PlotStore(ttl_seconds=30, max_plots=5)
+def test_get_returns_none_for_unknown_and_expired_plots(make_store):
+    store = make_store(ttl_seconds=30, max_plots=5)
     stale = store.add(plot("stale", age_seconds=60))[0]
 
     assert store.get(uuid4()) is None
     assert store.get(stale.id) is None
 
 
-def test_list_is_newest_first():
-    store = PlotStore(ttl_seconds=600, max_plots=5)
+def test_list_is_newest_first(make_store):
+    store = make_store(ttl_seconds=600, max_plots=5)
     store.add(plot("middle", age_seconds=5))
     store.add(plot("newest"))
     store.add(plot("oldest", age_seconds=10))
@@ -231,8 +250,8 @@ def test_list_is_newest_first():
     ]
 
 
-def test_summaries():
-    store = PlotStore(ttl_seconds=600, max_plots=5)
+def test_summaries(make_store):
+    store = make_store(ttl_seconds=600, max_plots=5)
     stored = store.add(plot("a", age_seconds=100))[0]
     now = datetime.now(UTC)
 
@@ -244,8 +263,8 @@ def test_summaries():
     assert summary.expires_at == stored.created_at + timedelta(seconds=600)
 
 
-def test_upsert_adds_a_new_plot_with_a_free_colour():
-    store = PlotStore(ttl_seconds=600, max_plots=5)
+def test_upsert_adds_a_new_plot_with_a_free_colour(make_store):
+    store = make_store(ttl_seconds=600, max_plots=5)
     store.add(plot("a"))
     new, evicted = store.upsert(plot("b"))
 
@@ -255,8 +274,8 @@ def test_upsert_adds_a_new_plot_with_a_free_colour():
     assert {item.data.title for item in store.list()} == {"a", "b"}
 
 
-def test_upsert_evicts_beyond_max_plots():
-    store = PlotStore(ttl_seconds=600, max_plots=1)
+def test_upsert_evicts_beyond_max_plots(make_store):
+    store = make_store(ttl_seconds=600, max_plots=1)
     oldest = store.add(plot("a", age_seconds=10))[0]
     _, evicted = store.upsert(plot("b"))
 
@@ -264,8 +283,8 @@ def test_upsert_evicts_beyond_max_plots():
     assert [item.data.title for item in store.list()] == ["b"]
 
 
-def test_add_evicts_several_plots_at_once():
-    store = PlotStore(ttl_seconds=600, max_plots=3)
+def test_add_evicts_several_plots_at_once(make_store):
+    store = make_store(ttl_seconds=600, max_plots=3)
     for i in range(3):
         store.add(plot(f"p{i}", age_seconds=10 - i))
     store.max_plots = 1
@@ -275,8 +294,8 @@ def test_add_evicts_several_plots_at_once():
     assert [item.data.title for item in store.list()] == ["new"]
 
 
-def test_update_persists_every_editable_field():
-    store = PlotStore(ttl_seconds=600, max_plots=5)
+def test_update_persists_every_editable_field(make_store):
+    store = make_store(ttl_seconds=600, max_plots=5)
     stored = store.add(plot("a"))[0]
 
     store.update(
@@ -300,8 +319,8 @@ def test_update_persists_every_editable_field():
     assert reloaded.updated_at > stored.updated_at
 
 
-def test_remove():
-    store = PlotStore(ttl_seconds=600, max_plots=5)
+def test_remove(make_store):
+    store = make_store(ttl_seconds=600, max_plots=5)
     stored = store.add(plot("a"))[0]
     store.add(plot("b"))
     before = store.revision
@@ -317,15 +336,15 @@ def test_remove():
     assert store.revision == before
 
 
-def test_no_op_mutations_leave_the_revision_alone():
-    store = PlotStore(ttl_seconds=600, max_plots=5)
+def test_no_op_mutations_leave_the_revision_alone(make_store):
+    store = make_store(ttl_seconds=600, max_plots=5)
     assert store.clear() == 0
     assert store.purge_expired() == 0
     assert store.revision == 0
 
 
-def test_purge_expired_respects_an_explicit_now():
-    store = PlotStore(ttl_seconds=30, max_plots=5)
+def test_purge_expired_respects_an_explicit_now(make_store):
+    store = make_store(ttl_seconds=30, max_plots=5)
     store.add(plot("a"))
 
     assert store.purge_expired(now=datetime.now(UTC)) == 0
@@ -333,8 +352,8 @@ def test_purge_expired_respects_an_explicit_now():
     assert store.purge_expired(now=later) == 1
 
 
-def test_concurrent_adds_are_all_stored():
-    store = PlotStore(ttl_seconds=600, max_plots=200)
+def test_concurrent_adds_are_all_stored(make_store):
+    store = make_store(ttl_seconds=600, max_plots=200)
     with ThreadPoolExecutor(max_workers=8) as pool:
         list(pool.map(lambda i: store.add(plot(f"p{i}")), range(100)))
 
