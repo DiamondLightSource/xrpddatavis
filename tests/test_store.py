@@ -136,6 +136,23 @@ def test_clear():
     assert store.list() == []
 
 
+def test_plots_persist_across_restarts(tmp_path):
+    db_path = tmp_path / "nested" / "plots.db"
+    store = PlotStore(ttl_seconds=600, max_plots=5, db_path=db_path)
+    stored = store.add(plot("a"))[0]
+    store.update(stored.id, PlotUpdate(pinned=True, name="renamed"))
+    store.close()
+
+    reopened = PlotStore(ttl_seconds=600, max_plots=5, db_path=db_path)
+    restored = reopened.get(stored.id)
+    assert restored is not None
+    assert restored.data.title == "renamed"
+    assert restored.pinned
+    assert restored.colour_index == stored.colour_index
+    assert restored.data.x == [1.0, 2.0]
+    reopened.close()
+
+
 @pytest.mark.parametrize(
     "payload",
     [

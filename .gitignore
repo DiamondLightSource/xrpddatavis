@@ -83,3 +83,6 @@ frontend/node_modules/
 frontend/*.tsbuildinfo
 frontend/coverage/
 /src/xrpddatavis/static/
+
+# local sqlite plot store (config plots.db_path)
+plots.db*

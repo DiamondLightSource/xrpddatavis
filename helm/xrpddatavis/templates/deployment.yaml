@@ -6,6 +6,12 @@ metadata:
     {{- include "xrpddatavis.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
+  {{- if .Values.persistence.enabled }}
+  # a ReadWriteOnce volume can't be shared between the old and new pod, and
+  # sqlite mustn't have two writers, so stop the old pod before starting anew
+  strategy:
+    type: Recreate
+  {{- end }}
   selector:
     matchLabels:
       {{- include "xrpddatavis.selectorLabels" . | nindent 6 }}
@@ -60,6 +66,10 @@ spec:
             - name: config-volume
               mountPath: "/etc/config/config.yaml"
               subPath: config.yaml
+            {{- if .Values.persistence.enabled }}
+            - name: data
+              mountPath: {{ .Values.persistence.mountPath }}
+            {{- end }}
           {{- with .Values.volumeMounts }}
             {{- toYaml . | nindent 12 }}
           {{- end }}
@@ -72,6 +82,11 @@ spec:
             sources:
             - configMap:
                 name: {{ include "xrpddatavis.fullname" . }}-config
+        {{- if .Values.persistence.enabled }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim | default (printf "%s-data" (include "xrpddatavis.fullname" .)) }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

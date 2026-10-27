@@ -1,9 +1,8 @@
 import re
-from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
 
-from conftest import xye
+from conftest import backdate, xye
 from xrpddatavis.config import Config
 from xrpddatavis.endpoints import (
     CLEAR_PLOTS,
@@ -175,9 +174,7 @@ def test_pin_via_edit_protects_from_expiry(client):
     assert edited.status_code == 200
     assert edited.json()["pinned"] is True
 
-    store = client.app.state.store
-    stored = store.get(plot_id)
-    stored.created_at = datetime.now(UTC) - timedelta(seconds=120)
+    backdate(client.app.state.store, plot_id, 120)
 
     # config fixture sets ttl_seconds=60 - this would normally be long expired
     listed = client.get(LIVEPLOTS).json()["plots"]
@@ -265,9 +262,7 @@ def test_clear_all(client):
 def test_expired_plots_disappear(client):
     plot_id = client.post(PLOT, json=xye("stale")).json()["id"]
 
-    store = client.app.state.store
-    stale = store.get(plot_id)
-    stale.created_at = datetime.now(UTC) - timedelta(seconds=120)
+    backdate(client.app.state.store, plot_id, 120)
 
     assert client.get(LIVEPLOTS).json()["plots"] == []
 

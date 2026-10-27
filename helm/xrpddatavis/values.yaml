@@ -12,7 +12,9 @@ fullnameOverride: ""
 podAnnotations: {}
 podLabels: {}
 
-podSecurityContext: {}
+# fsGroup makes the persistence volume writable by securityContext.runAsUser
+podSecurityContext:
+  fsGroup: 1000
 
 securityContext:
   runAsUser: 1000
@@ -80,7 +82,9 @@ config:
     ttl_seconds: 3600
     # largest single trace accepted by POST /plot
     max_points: 1000000
-    db_path: /data/results.db # on the PVC, keep in sync with persistence.mountPath
+    # sqlite file the plots are kept in. Must live under persistence.mountPath
+    # for plots to survive a pod restart.
+    db_path: /data/plots.db
   cleanup:
     # how often expired plots are swept up
     interval_seconds: 300
@@ -92,6 +96,17 @@ config:
     stream:
       enabled: true
       level: "DEBUG"
+
+# a PersistentVolumeClaim mounted at mountPath, holding config.plots.db_path
+persistence:
+  enabled: true
+  # use an existing claim rather than creating one
+  existingClaim: ""
+  mountPath: /data
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 1Gi
+  annotations: {}
 
 volumeMounts: []
 volumes: []
