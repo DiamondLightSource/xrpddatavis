@@ -34,6 +34,8 @@ class PlotsConfig(BaseModel):
     # maximum number of points accepted in a single trace, to stop one
     # oversized POST exhausting the server's memory
     max_points: int = Field(default=1_000_000, ge=1)
+    # sqlite file the results are stored in
+    db_path: str = "results.db"
 
 
 class CleanupConfig(BaseModel):
