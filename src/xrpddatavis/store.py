@@ -1,6 +1,6 @@
 """In-memory store of plots that expire after a configured TTL."""
 
-# ``ResultStore.list`` shadows the builtin inside the class body, so defer
+# ``PlotStore.list`` shadows the builtin inside the class body, so defer
 # annotation evaluation rather than rename a method already in use.
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from xrpddatavis.models import PlotData, PlotSummary, PlotUpdate
 PALETTE_SLOTS = 8
 
 
-class ResultStore:
+class PlotStore:
     """Keep generated results around for ``ttl_seconds`` then drop them.
 
     At most ``max_plots`` are held at once; adding beyond that evicts the

@@ -206,7 +206,7 @@ class PlotUpdate(BaseModel):
     plot_type: PLOT_TYPES | None = None
     colour_index: int | None = Field(default=None, ge=0)
     data_type: DATA_TYPES | str | None = None
-    # when true, this plot is exempt from ttl_seconds expiry (see ResultStore)
+    # when true, this plot is exempt from ttl_seconds expiry (see PlotStore)
     pinned: bool | None = None
 
 
