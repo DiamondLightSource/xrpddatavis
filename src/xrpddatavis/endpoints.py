@@ -18,3 +18,11 @@ CLEAR_PLOTS = "/plots"  # DELETE every plot
 # --- frontend ----------------------------------------------------------------
 UI = "/"
 STATIC = "/static"
+
+
+# --- Auth ----------------------------------------------------------------
+
+AUTHORISE = "/authorise"
+TOKEN = "/token"
+LOGOUT = "/logout"
+PROTECTED = "/protected"

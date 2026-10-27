@@ -19,7 +19,7 @@ class OAuth2PasswordBearerCookie(OAuth2):
     ):
         if not scopes:
             scopes = {}
-        flows = OAuthFlowsModel(password={"tokenUrl": token_url, "scopes": scopes})
+        flows = OAuthFlowsModel(password={"tokenUrl": token_url, "scopes": scopes})  # type: ignore
         super().__init__(flows=flows, scheme_name=scheme_name, auto_error=True)
 
     async def __call__(self, request: Request) -> str | None:

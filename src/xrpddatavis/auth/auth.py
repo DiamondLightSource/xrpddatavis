@@ -4,6 +4,7 @@ from pydantic import BaseModel
 
 from xrpddatavis.auth.oidc import Auth
 from xrpddatavis.config import Config
+from xrpddatavis.endpoints import AUTHORISE, LOGOUT, PROTECTED, TOKEN
 
 
 class Unauthorised(BaseModel):
@@ -20,13 +21,13 @@ class Token(BaseModel):
 router = APIRouter(tags=["Authentication"], responses={401: {"model": Unauthorised}})
 
 
-@router.get("/authorise", status_code=302, response_class=RedirectResponse)
+@router.get(AUTHORISE, status_code=302, response_class=RedirectResponse)
 def authorise_user(redirect_uri: str, response_type: str = "token"):
     """Redirect user to authorisation page"""
     return Auth.get_auth_redirect(redirect_uri, response_type)
 
 
-@router.get("/token", response_model=Token)
+@router.get(TOKEN, response_model=Token)
 def get_token(redirect_uri: str, code: str, response: Response):
     """Get an access token from a authentication code"""
     user_info = Auth.get_token(redirect_uri, code)
@@ -58,13 +59,13 @@ def get_token(redirect_uri: str, code: str, response: Response):
     return user_info
 
 
-@router.get("/logout", status_code=302, response_class=RedirectResponse)
+@router.get(LOGOUT, status_code=302, response_class=RedirectResponse)
 def logout():
     """Redirect user to logout page"""
     return Auth.get_logout_redirect()
 
 
-@router.get("/protected")
+@router.get(PROTECTED)
 def protected_endpoint(user=Depends(Auth)):
     """A sample protected endpoint, that requires the user to pass a valid token
     through the authorisation header. Note the 'Auth' dependency"""
