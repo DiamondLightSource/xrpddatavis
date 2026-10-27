@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -71,7 +71,7 @@ class PlotStore:
             return self._revision
 
     @contextmanager
-    def _transaction(self) -> Iterator[sqlite3.Connection]:
+    def _transaction(self) -> Generator[sqlite3.Connection]:
         """Hold the lock and run everything inside one sqlite transaction."""
         with self._lock:
             self._conn.execute("BEGIN")
