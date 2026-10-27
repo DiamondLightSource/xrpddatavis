@@ -41,6 +41,7 @@ class PlotsConfig(BaseModel):
 
 
 class AuthConfig(BaseModel):
+    enabled: bool = True
     well_known_url: str = (
         "https://identity.diamond.ac.uk/realms/dls/.well-known/openid-configuration"
     )
