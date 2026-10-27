@@ -3,7 +3,7 @@ from fastapi.openapi.models import OAuthFlows as OAuthFlowsModel
 from fastapi.security import OAuth2
 from fastapi.security.utils import get_authorization_scheme_param
 
-from .config import Config
+from xrpddatavis.config import Config
 
 """This scheme extracts the authorisation token from a cookie. If that
 is not present, then it falls back into checking for one inside an authorisation
