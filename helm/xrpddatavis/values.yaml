@@ -12,9 +12,7 @@ fullnameOverride: ""
 podAnnotations: {}
 podLabels: {}
 
-# fsGroup makes the persistence volume writable by securityContext.runAsUser
-podSecurityContext:
-  fsGroup: 1000
+podSecurityContext: {}
 
 securityContext:
   runAsUser: 1000
@@ -106,7 +104,8 @@ persistence:
   storageClass: ""
   accessMode: ReadWriteOnce
   size: 1Gi
-  annotations: {}
+  annotations:
+    helm.sh/resource-policy: keep # don't delete the PVC (and the plots) on helm uninstall
 
 volumeMounts: []
 volumes: []
