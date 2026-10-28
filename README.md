@@ -5,249 +5,113 @@
 
 # xrpddatavis
 
-A deployable API that can be sent DataPlot json messages via POST and then plotted via a web front end.
+Send 1D data (x, y and optional errors) to `/plot`, and it shows up straight
+away in a web page at `/`: a list of plots on the left and an interactive
+chart on the right. Plots can be overlaid, offset or shown in a grid, and
+filtered by data type, file number or instrument session.
 
-POST a trace to `/plot` and it appears immediately in the browser at `/`: a table
-of every live plot on the left, an interactive Plotly canvas on the right, in the
-spirit of DAWN's data visualisation perspective. Plots can be selected and
-deselected, overlaid on one pair of axes, offset into a waterfall, or split into a
-grid of panels. Tag a plot with a `data_type` (e.g. `pxrd`, `gr`, `sq`) and a tab
-for it appears automatically on the left, alongside quick filters for file number.
-The server holds at most `plots.max_plots` at a time and clears each plot
-`plots.ttl_seconds` after it arrives.
+The server keeps at most `max_plots` plots, and removes each one
+`ttl_seconds` after it arrives (see [Configuration](#configuration)).
 
-The frontend is a React + TypeScript app built with [MUI](https://mui.com) and
-Diamond's [SciReactUI](https://diamondlightsource.github.io/sci-react-ui/) design
-system - see [`frontend/`](frontend/readme.md) for its source and dev workflow.
-Everything below is about the server; it doesn't change.
-
-What            | Where
-:---:           | :---:
-Source          | <https://github.com/DiamondLightSource/xrpddatavis>
-PyPI            | `pip install xrpddatavis`
-Docker          | `docker run ghcr.io/diamondlightsource/xrpddatavis:latest`
-Releases        | <https://github.com/DiamondLightSource/xrpddatavis/releases>
+| What | Where |
+| --- | --- |
+| Source | <https://github.com/DiamondLightSource/xrpddatavis> |
+| PyPI | `pip install xrpddatavis` |
+| Docker | `docker run ghcr.io/diamondlightsource/xrpddatavis:latest` |
+| Releases | <https://github.com/DiamondLightSource/xrpddatavis/releases> |
 
 ## Run it
 
-```
-python -m xrpddatavis --config config.yaml serve      # or: xrpddatavis serve
-```
-
-Then open <http://localhost:8000/>. The interactive API docs are at `/docs`.
-
-Installing from PyPI or the Docker image both ship the frontend already
-built. Running from a git checkout instead, build it once first - it's not
-committed to the repo (see [`frontend/readme.md`](frontend/readme.md)):
-
-```
-cd frontend && npm install && npm run build && cd ..
+```bash
+xrpddatavis serve
 ```
 
-## Try it with curl
+Open <http://localhost:8000/>. The API docs are at <http://localhost:8000/docs>.
 
-Post a bare `DataPlot` document - `title`, `x` and `y` are the only required fields:
+From a git checkout, build the frontend once first (PyPI and Docker already
+include it):
+
+```bash
+xrpddatavis build
+```
+
+## Sending a plot
+
+POST JSON to `/plot`. Only `title`, `x` and `y` are required:
 
 ```bash
 curl -X POST http://localhost:8000/plot \
   -H 'Content-Type: application/json' \
-  -d '{
-    "title": "quick-test",
-    "x": [10.0, 10.1, 10.2, 10.3, 10.4],
-    "y": [120, 340, 980, 310, 118]
-  }'
+  -d '{"title": "sample-001", "x": [10.0, 10.1, 10.2], "y": [120, 340, 118]}'
 ```
 
-Post the full form - errors, provenance and axis labels:
+Optional fields:
+
+| Field | What it does |
+| --- | --- |
+| `e` | Error on each `y` point |
+| `x_label`, `y_label` | Axis labels |
+| `data_type` | Groups plots into tabs, e.g. `pxrd`, `gr`, `sq` |
+| `filepath` | Source file. A Diamond path (`/dls/i11/data/2026/cm12345-1/...`) also sets the instrument session |
+| `filenumber` | Groups plots by file number |
+| `plot_type` | `line` (default), `scatter` or `line+markers` |
+| `upsert` | `true` replaces the plot with the same `title`, instead of adding another: for live scans |
+| `calc` | A fitted curve on the same `x`; makes it a fitted plot. Can add `diff`, `background` and `markers` |
+
+The full schema, with examples you can try, is at `/docs`.
+
+### Demo data
+
+With the server running, [`examples/feed_demo.py`](examples/feed_demo.py) posts
+3 scans of made-up `pxrd`, `iq`, `sq`, `fq` and `gr` data:
 
 ```bash
-curl -X POST http://localhost:8000/plot \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "title": "si-standard",
-    "x": [28.0, 28.2, 28.4, 28.6, 28.8],
-    "y": [100, 850, 9000, 870, 120],
-    "e": [10, 29, 95, 30, 11],
-    "filepath": "/dls/i11/data/2026/cm12345-1/si-standard.xye",
-    "filenumber": 42,
-    "x_label": "2θ / °",
-    "y_label": "Intensity / counts",
-    "plot_type": "line"
-  }'
+python examples/feed_demo.py
 ```
-
-Post a `FittedDataPlot` - it's a `DataPlot` with a `calc` curve sharing the same
-`x`, plus the `diff`, `background` and `markers` conventionally drawn alongside it
-in a Rietveld-style refinement plot (`diff` defaults to `y - calc` when omitted,
-and `background` may be one constant or a full array):
-
-```bash
-curl -X POST http://localhost:8000/plot \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "title": "si-standard",
-    "x": [28.0, 28.2, 28.4, 28.6, 28.8],
-    "y": [100, 850, 9000, 870, 120],
-    "e": [10, 29, 95, 30, 11],
-    "x_label": "2θ / °",
-    "y_label": "Intensity / counts",
-    "calc": [105, 840, 8950, 880, 118],
-    "background": 95.0,
-    "markers": [28.4]
-  }'
-```
-
-Tag `data_type` on the data to sort it into the frontend's type tabs - any value
-works, but `pxrd` / `iq` / `sq` / `fq` / `gr` are the ones the demo script below
-generates. A tab only appears while at least one live plot uses it:
-
-```bash
-curl -X POST http://localhost:8000/plot \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "title": "gr-001",
-    "x": [0.0, 0.5, 1.0, 1.5, 2.0],
-    "y": [0.0, 0.02, -0.05, 0.9, 0.1],
-    "filenumber": 1,
-    "data_type": "gr",
-    "x_label": "r / Å",
-    "y_label": "G(r)"
-  }'
-```
-
-A `filepath` that looks like a real Diamond path (`/dls/BEAMLINE/data/YEAR/SESSION/...`)
-gives the plot an instrument session automatically - no extra field needed. It shows
-up in the title bar's session picker, which only appears once something needs it:
-
-```bash
-curl -X POST http://localhost:8000/plot \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "title": "sample-001",
-    "x": [10.0, 10.1, 10.2],
-    "y": [120.0, 340.0, 118.0],
-    "filepath": "/dls/i11/data/2026/cm12345-1/sample-001.xye"
-  }'
-```
-
-Generate something that looks like a real pattern, straight from the shell:
-
-```bash
-python -c '
-import json, math, random
-x = [10 + i * 0.025 for i in range(2000)]
-peaks = [(18.2, 4000), (22.6, 9000), (28.4, 5600), (36.1, 4600), (47.3, 2000)]
-y = [120 + 900 * math.exp(-(xi - 10) / 12)
-     + sum(h * math.exp(-0.5 * ((xi - c) / 0.1) ** 2) for c, h in peaks)
-     for xi in x]
-y = [random.gauss(v, v ** 0.5) for v in y]
-print(json.dumps({"title": "shell-pattern", "x": x, "y": y,
-                  "e": [v ** 0.5 for v in y], "x_label": "2θ / °"}))' \
-| curl -X POST http://localhost:8000/plot -H 'Content-Type: application/json' -d @-
-```
-
-List what is live (metadata only - this is what the table is built from):
-
-```bash
-curl http://localhost:8000/liveplots | python -m json.tool
-```
-
-Fetch one plot's arrays, rename it, recolour it, delete it, clear everything:
-
-```bash
-ID=$(curl -s http://localhost:8000/liveplots | python -c 'import json,sys; print(json.load(sys.stdin)["plots"][0]["id"])')
-
-curl http://localhost:8000/plot/$ID | python -m json.tool | head -20
-curl -X PATCH http://localhost:8000/edit/$ID -H 'Content-Type: application/json' \
-     -d '{"name": "renamed", "plot_type": "line+markers", "colour_index": 3, "data_type": "sq"}'
-curl -X DELETE http://localhost:8000/remove/$ID
-curl -X DELETE http://localhost:8000/plots
-```
-
-Pin a plot so it is exempt from `ttl_seconds` expiry - equivalent to ticking its 📌
-in the table - then unpin it again:
-
-```bash
-curl -X PATCH http://localhost:8000/edit/$ID -H 'Content-Type: application/json' -d '{"pinned": true}'
-curl -X PATCH http://localhost:8000/edit/$ID -H 'Content-Type: application/json' -d '{"pinned": false}'
-```
-
-Watch the change stream the frontend uses (one message per store change):
-
-```bash
-curl -N http://localhost:8000/events
-```
-
-Update one trace in place as a scan progresses, instead of piling up new plots -
-the plot keeps its id, its colour and its place in the table:
-
-```bash
-curl -X POST http://localhost:8000/plot -H 'Content-Type: application/json' \
-  -d '{"upsert": true, "title": "live-scan", "x": [1,2,3], "y": [4,9,2]}'
-```
-
-### Watch it work end to end
-
-```bash
-xrpddatavis serve &                    # terminal 1
-python examples/feed_demo.py          # terminal 2: 3 scans x 5 data types = 15 plots
-```
-
-[`examples/feed_demo.py`](examples/feed_demo.py) mimics a PDFgetX3 job: each "scan"
-posts a raw `iq`, a classic `pxrd` pattern, and the derived `sq` / `fq` / `gr`
-curves, all sharing one file number. Open <http://localhost:8000/> and you'll see
-five Type tabs and a File # chip per scan appear on the left immediately - click
-**GR** to see only pair-distribution functions, then a file-number chip to pin it
-to one scan, or **Reset** to clear both. Tick rows and switch between Overlay,
-Offset and Grid on the right.
-
-To post something different (more scans, other data types, another file
-number or instrument session), change the `post_scans(...)` call at the
-bottom of the script.
 
 ## Endpoints
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `POST` | `/plot` | Accept a `DataPlot`, or a `FittedDataPlot` if it carries `calc` |
-| `GET` | `/liveplots` | Metadata for every live plot, plus `max_plots`, `ttl_seconds` and a `revision` |
-| `GET` | `/plot/{id}` | The full arrays for one plot |
+| `POST` | `/plot` | Add a plot (or replace one, with `upsert`) |
+| `GET` | `/liveplots` | Every live plot, without its data |
+| `GET` | `/plot/{id}` | One plot, with its data |
 | `PATCH` | `/edit/{id}` | Change `name`, `plot_type`, `colour_index`, `data_type` or `pinned` |
 | `DELETE` | `/remove/{id}` | Delete one plot |
 | `DELETE` | `/plots` | Delete every plot |
-| `GET` | `/events` | Server-sent events - one message whenever the set of plots changes |
+| `GET` | `/events` | A message each time the plots change (server-sent events) |
 | `GET` | `/limits` | `max_plots` and `ttl_seconds` |
-| `GET` | `/info` | Static app metadata for the UI title bar: `beamline`, and `logout_url` |
-| `GET` | `/user` | The logged-in user (`fedid`, `name`, `email`); `204` when auth is off |
-| `GET` | `/healthz` | Liveness/readiness |
-| `GET` | `/` | The web frontend |
+| `GET` | `/info` | The beamline name and logout link, for the page header |
+| `GET` | `/user` | The logged-in user; `204` when auth is off |
+| `GET` | `/healthz` | Health check |
 
 ## Configuration
 
-`config.yaml` (mounted at `/etc/config/config.yaml` in the Helm chart, or pointed
-at with `CONFIG_PATH`). Any value can be overridden by an environment variable
-using `__` as the nesting separator, e.g. `PLOTS__MAX_PLOTS=50`.
+Settings are in `config.yaml` (or the file given by `CONFIG_PATH`):
 
 ```yaml
 server:
   host: "0.0.0.0"
   port: 8000
-  suppress_polling_logs: true   # drop access logs for /liveplots, /events, /healthz
+  suppress_polling_logs: true   # hide access logs for /liveplots, /events, /healthz
 
 beamline:
-  name: "i11"  # shown in the UI title bar; blank outside a beamline deployment
+  name: "i11"                   # shown in the page header
 
 plots:
-  max_plots: 20        # most plots held - and displayable - at once; oldest is evicted
-  ttl_seconds: 3600    # a plot is cleared this long after it arrives
-  max_points: 1000000  # largest single trace accepted by POST /plot
+  max_plots: 20                 # oldest plot is removed when this is exceeded
+  ttl_seconds: 3600             # each plot is removed this long after it arrives
+  max_points: 1000000           # largest trace POST /plot accepts
 
 cleanup:
-  interval_seconds: 300  # how often expired plots are swept up
+  interval_seconds: 300         # how often expired plots are removed
+
+auth:
+  enabled: false                # see Authentication
 ```
 
-The same keys live under `config:` in `helm/xrpddatavis/values.yaml`, so
-`--set config.plots.max_plots=50` changes the limit on a deployment.
+When deployed, the same settings go under `config:` in
+[`helm/xrpddatavis/values.yaml`](helm/xrpddatavis/values.yaml).
 
 ## Authentication
 
@@ -332,48 +196,15 @@ Each time:
 | `Invalid access token: Audience doesn't match` | `auth.client_audience` doesn't match the token's `aud` |
 | `/user` gives `403 ... no fedid claim` | the `fedid` scope isn't a default scope on the client |
 
-## Frontend notes
+## Using the page
 
-* Selection, layout mode, options and theme are remembered per browser; the plots
-  themselves are server state shared by everyone looking at the page.
-* Colour follows the plot, not its position in the list - the server hands each
-  plot a slot in a fixed eight-colour palette validated for colour-vision
-  deficiency, and holds it for the plot's lifetime. Click a swatch to change it.
-* Double-click a name in the table to rename it.
-* Plotly is loaded from cdnjs rather than bundled - see
-  [`frontend/readme.md`](frontend/readme.md) for why.
-* Light/dark follows the system by default; the moon/sun button in the top
-  bar overrides it (MUI's colour scheme system, themed by SciReactUI's
-  `DiamondDSTheme`).
-* A plot's **instrument session** (e.g. `cm12345-1`) is read from its
-  `filepath` - `/dls/BEAMLINE/data/YEAR/SESSION/...` - unless it's set
-  explicitly via `data.instrument_session`. A dropdown next to the beamline
-  name in the title bar lists whatever sessions are currently live and
-  narrows the whole view to one; it only appears once at least one plot has
-  a resolvable session, and hides on narrower screens along with the
-  beamline name.
-* **Type** tabs and **File #** chips above the table filter it down, and combine
-  with each other, the instrument-session picker and the free-text search. A
-  tab/chip only exists while at least one live plot needs it, and disappears
-  again once that plot expires or is deleted. A **Reset** button appears next
-  to the search box whenever a filter is active. Filtering only changes what
-  is *listed* - your current selection (and therefore what is drawn) is
-  untouched by it.
-* Click the 📌 next to a plot's TTL to **pin** it - a pinned plot is skipped by
-  `ttl_seconds` expiry (and, while any unpinned plot remains, by `max_plots`
-  eviction too) until it is unpinned or deleted by hand. `max_plots` is still a
-  hard cap, though: if *every* plot is pinned, the oldest of those is evicted
-  rather than refusing new data.
-* The plot list is **resizable** - drag the thin handle on the sidebar's right
-  edge (or focus it and use the arrow keys). Its width is remembered per browser.
-* **Upload file…** plots a local column file without writing any curl. It
-  scans for where the numeric data actually starts, so real instrument
-  formats work directly - a PDFgetX2 `.gr`/`.sq`/`.fq`/`.iq` file's 100+
-  line `key=value`/SPEC-metadata preamble is skipped automatically, and its
-  `#L` column-name line (or a plain header row, for simpler files) is read
-  for axis labels. Pick which column is X, Y and (optional) error - sensible
-  defaults are pre-selected but always adjustable, since a file's column
-  order isn't always x/y/e. If the data's start can't be found automatically
-  (an unusual or ambiguous file), it asks for the number of header lines to
-  skip instead. Parsing happens entirely in the browser; the result is
-  POSTed to `/plot` like anything else.
+- Tick plots to show them. Choose Overlay, Offset or Grid on the right.
+- The tabs, file-number chips, session picker and search box filter the list.
+- Double-click a name to rename it; click its colour swatch to change colour.
+- Click 📌 to stop a plot expiring.
+- **Upload file…** plots a local column file, including PDFgetX files with
+  their header.
+- Your selection, layout and theme are saved in your browser; the plots are
+  shared by everyone.
+
+Frontend source and development: [`frontend/readme.md`](frontend/readme.md).
