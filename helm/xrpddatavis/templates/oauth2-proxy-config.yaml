@@ -1,0 +1,89 @@
+{{- if .Values.auth.enabled }}
+{{- $issuer := .Values.auth.issuer }}
+# oauth2-proxy's settings, split the way Atlas splits them: the "alpha" config
+# (providers, upstreams, headers) and the flat config file (everything else).
+# oauth2-proxy only reads these at start-up - restart its pod after changing
+# them: kubectl rollout restart deployment {{ include "xrpddatavis.oauth2ProxyName" . }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ index .Values "oauth2-proxy" "alphaConfig" "existingSecret" }}
+  labels:
+    {{- include "xrpddatavis.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  oauth2_proxy.yml: |
+    server:
+      BindAddress: "0.0.0.0:{{ index .Values "oauth2-proxy" "service" "portNumber" }}"
+
+    metricsServer:
+      BindAddress: "0.0.0.0:44180"
+
+    # what the app receives with every request - it verifies this token
+    # itself (src/xrpddatavis/auth/oidc.py)
+    injectRequestHeaders:
+      - name: Authorization
+        values:
+          - claim: access_token
+            prefix: "Bearer "
+      - name: X-Auth-Request-User
+        values:
+          - claim: user
+      - name: X-Auth-Request-Email
+        values:
+          - claim: email
+
+    providers:
+      - provider: oidc
+        id: keycloak
+        # from the keycloak secret, via environment variables the
+        # oauth2-proxy chart sets
+        clientID: ${OAUTH2_PROXY_CLIENT_ID}
+        clientSecret: ${OAUTH2_PROXY_CLIENT_SECRET}
+        scope: {{ .Values.auth.scope | quote }}
+        oidcConfig:
+          issuerURL: {{ $issuer | quote }}
+          insecureAllowUnverifiedEmail: true
+          insecureSkipNonce: true
+          emailClaim: sub
+          audienceClaims: ["aud"]
+
+    upstreamConfig:
+      proxyRawPath: false
+      upstreams:
+        - id: xrpddatavis
+          path: /
+          uri: http://{{ include "xrpddatavis.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}
+          passHostHeader: true
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ index .Values "oauth2-proxy" "config" "existingConfig" }}
+  labels:
+    {{- include "xrpddatavis.labels" . | nindent 4 }}
+data:
+  oauth2_proxy.cfg: |
+    email_domains = ["*"]
+    cookie_secure = true
+    cookie_samesite = "lax"
+    cookie_expire = {{ .Values.auth.cookieExpire | quote }}
+    cookie_refresh = "45s"
+    cookie_name = "{{ include "xrpddatavis.oauth2ProxyName" . }}-cookie"
+    # trust X-Forwarded-* from the ingress, so redirects back after login use
+    # the public https://<host> address
+    reverse_proxy = true
+    skip_provider_button = true
+    # open to anyone: posting a plot (so scripts can send data without
+    # logging in) and the probes (kubelet calls the app directly, but keep
+    # them open here too). Must match OPEN_ROUTER in server.py.
+    skip_auth_routes = ["POST=^/plot$", "GET=^/healthz$"]
+    # answer these with 401 rather than a redirect to Keycloak when the
+    # session has expired - the frontend then sends the browser to log in
+    api_routes = ["^/(liveplots|plot|plots|edit|remove|events|limits|info|user)(/|$)"]
+    # lets logout continue on to Keycloak's own sign-out page
+    whitelist_domains = [{{ regexReplaceAll "^https?://([^/]+).*$" $issuer "${1}" | quote }}]
+{{- with .Values.auth.extraConfig }}
+{{ . | indent 4 }}
+{{- end }}
+{{- end }}
