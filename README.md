@@ -125,6 +125,9 @@ BlueAPI do it:
   reads the user's `fedid` from it (`src/xrpddatavis/auth/oidc.py`).
 - Without a token, every route returns `401` except `POST /plot`, `/healthz`
   and the page itself. Anyone can send plots.
+- Each user only sees plots with no instrument session, plus those in
+  sessions Diamond's policy service (OPA, `auth.opa_url`) says they can access.
+  Other plots are hidden: they can't be listed, fetched, edited or deleted.
 
 Use the user in an endpoint:
 

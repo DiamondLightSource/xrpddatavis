@@ -61,6 +61,10 @@ class AuthConfig(BaseModel):
     # the "aud" claim a token must carry to be accepted
     client_audience: str = "account"
 
+    # Diamond's policy service rule that says whether a user may see an
+    # instrument session - plots in sessions they can't see are hidden
+    opa_url: str = "https://opa.diamond.ac.uk/v1/data/diamond/policy/session/access"
+
     # where the frontend sends the user to log out - oauth2-proxy's sign-out
     # route, which clears its cookie then ends the Keycloak session too
     logout_redirect_endpoint: str = "/oauth2/sign_out"

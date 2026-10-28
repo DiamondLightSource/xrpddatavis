@@ -5,6 +5,7 @@ server trusts is always the one oauth2-proxy logs users in against */ -}}
     "enabled" .Values.auth.enabled
     "issuer" .Values.auth.issuer
     "client_audience" .Values.auth.client_audience
+    "opa_url" .Values.auth.opa_url
 ) -}}
 apiVersion: v1
 kind: ConfigMap

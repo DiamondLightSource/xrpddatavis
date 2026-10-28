@@ -106,6 +106,9 @@ auth:
   # token from the realm; once Keycloak adds an audience mapper for this app's
   # client, set it to the client ID so tokens issued to other apps are refused
   client_audience: account
+  # Diamond's policy service rule for "may this user see this instrument
+  # session" - plots in sessions a user can't see are hidden from them
+  opa_url: https://opa.diamond.ac.uk/v1/data/diamond/policy/session/access
   # what oauth2-proxy asks Keycloak for - matches Atlas
   scope: openid email profile offline_access posix-uid
   # how long a login lasts before the user has to log in again
