@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Alert, Box, Divider, Snackbar, Stack, Typography } from "@mui/material";
 import { useColorScheme } from "@mui/material/styles";
-import { ColourSchemeButton, Logo, Navbar } from "@diamondlightsource/sci-react-ui";
+import { ColourSchemeButton, Logo, Navbar, User } from "@diamondlightsource/sci-react-ui";
 import { api, ApiError } from "./api/client";
 import type { PlotRequest, PlotSummary } from "./api/types";
 import { useLivePlots } from "./hooks/useLivePlots";
@@ -10,6 +10,7 @@ import { useFacets } from "./hooks/useFacets";
 import { usePlotSort } from "./hooks/usePlotSort";
 import { ALL_SESSIONS, useInstrumentSessionFilter } from "./hooks/useInstrumentSessionFilter";
 import { useAppInfo } from "./hooks/useAppInfo";
+import { useUser } from "./hooks/useUser";
 import { usePersistentState } from "./hooks/usePersistentState";
 import { useResizableWidth } from "./hooks/useResizableWidth";
 import { fmtTime } from "./format";
@@ -50,7 +51,8 @@ export default function App() {
   );
   const sessionFilter = useInstrumentSessionFilter(plots);
   const facets = useFacets(sessionFilter.filtered);
-  const { beamline } = useAppInfo();
+  const { beamline, logoutUrl } = useAppInfo();
+  const { user } = useUser();
   const { colorScheme } = useColorScheme();
 
   const [filterText, setFilterText] = useState("");
@@ -183,6 +185,12 @@ export default function App() {
           <Stack direction="row" spacing={1.5} alignItems="center">
             <ConnectionStatus connection={connection} />
             <ColourSchemeButton />
+            {user && (
+              <User
+                user={{ fedid: user.fedid, name: user.name ?? undefined }}
+                onLogout={logoutUrl ? () => window.location.assign(logoutUrl) : undefined}
+              />
+            )}
           </Stack>
         }
       />

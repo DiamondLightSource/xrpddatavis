@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiError, api } from "./client";
+import { ApiError, LOGIN_PATH, api } from "./client";
 
 function respond(status: number, body?: unknown, statusText = "") {
   return new Response(body === undefined ? null : JSON.stringify(body), { status, statusText });
@@ -72,5 +72,44 @@ describe("api", () => {
   it("falls back to the status line for a non-JSON error body", async () => {
     fetchMock.mockResolvedValue(new Response("boom", { status: 500, statusText: "Server Error" }));
     await expect(api.plot("x")).rejects.toThrow("500 Server Error");
+  });
+
+  it("sends Accept: application/json even with a request body", async () => {
+    fetchMock.mockResolvedValue(respond(200, { id: "new" }));
+    await api.post({ title: "t", x: [1], y: [2] });
+    expect(fetchMock.mock.calls[0][1]?.headers).toMatchObject({ Accept: "application/json" });
+  });
+
+  it("GETs the user, which is undefined when auth is off", async () => {
+    fetchMock.mockResolvedValue(respond(204));
+    await expect(api.user()).resolves.toBeUndefined();
+    expect(fetchMock.mock.calls[0][0]).toBe("user");
+  });
+});
+
+describe("an expired session", () => {
+  const assign = vi.fn();
+
+  beforeEach(() => {
+    assign.mockReset();
+    sessionStorage.clear();
+    vi.stubGlobal("location", { ...window.location, pathname: "/", search: "?x=1", assign });
+  });
+
+  it("sends the browser back through login, returning to this page", async () => {
+    fetchMock.mockResolvedValue(respond(401, { detail: "Not authenticated" }));
+
+    await expect(api.liveplots()).rejects.toThrow("Session expired");
+
+    expect(assign).toHaveBeenCalledWith(`${LOGIN_PATH}?rd=${encodeURIComponent("/?x=1")}`);
+  });
+
+  it("doesn't loop if the server still says 401 straight after logging in", async () => {
+    fetchMock.mockImplementation(async () => respond(401, { detail: "Invalid access token" }));
+
+    await expect(api.liveplots()).rejects.toThrow("Session expired");
+    await expect(api.liveplots()).rejects.toThrow("Invalid access token");
+
+    expect(assign).toHaveBeenCalledTimes(1);
   });
 });

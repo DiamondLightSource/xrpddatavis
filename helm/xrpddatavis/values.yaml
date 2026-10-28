@@ -25,7 +25,10 @@ service:
 ingress:
   enabled: false
   className: ""
-  annotations: {}
+  annotations:
+    # oauth2-proxy's session cookie can outgrow nginx's default 4k header
+    # buffer, which shows up as a 502 straight after logging in
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "8k"
   hosts: []
   tls: []
 
@@ -75,9 +78,9 @@ config:
   plots:
     # maximum number of plots held - and therefore displayable - at once.
     # Posting past this evicts the oldest plot.
-    max_plots: 20
+    max_plots: 200
     # a plot is cleared automatically this long after it arrives
-    ttl_seconds: 3600
+    ttl_seconds: 43200
     # largest single trace accepted by POST /plot
     max_points: 1000000
     # sqlite file the plots are kept in. Must live under persistence.mountPath
@@ -94,6 +97,50 @@ config:
     stream:
       enabled: true
       level: "DEBUG"
+
+auth:
+  enabled: true
+  # the Keycloak realm users log in against - used by oauth2-proxy and the app
+  issuer: https://identity.diamond.ac.uk/realms/dls
+  # the "aud" claim the app requires in access tokens. "account" is in every
+  # token from the realm; once Keycloak adds an audience mapper for this app's
+  # client, set it to the client ID so tokens issued to other apps are refused
+  client_audience: account
+  # Diamond's policy service rule for "may this user see this instrument
+  # session" - plots in sessions a user can't see are hidden from them
+  opa_url: https://opa.diamond.ac.uk/v1/data/diamond/policy/session/access
+  # what oauth2-proxy asks Keycloak for - matches Atlas
+  scope: openid email profile offline_access posix-uid
+  # how long a login lasts before the user has to log in again
+  cookieExpire: 168h
+  # extra lines for oauth2-proxy's config file, see
+  # https://oauth2-proxy.github.io/oauth2-proxy/configuration/overview
+  extraConfig: ""
+
+# the oauth2-proxy sub-chart's own values, see
+# https://github.com/oauth2-proxy/manifests/tree/main/helm/oauth2-proxy
+oauth2-proxy:
+  extraArgs:
+    skip-provider-button: "true"
+    standard-logging: "true"
+    request-logging: "true"
+    auth-logging: "true"
+    show-debug-on-error: "true"
+  # traffic arrives through this chart's ingress instead
+  ingress:
+    enabled: false
+  config:
+    # the SealedSecret in templates/keycloak_secret.yaml - holds client-id,
+    # client-secret and cookie-secret
+    existingSecret: xrpddatavis-keycloak-secret
+    # made by templates/oauth2-proxy-config.yaml
+    existingConfig: xrpddatavis-oauth2-proxy-config
+  alphaConfig:
+    enabled: true
+    # made by templates/oauth2-proxy-config.yaml
+    existingSecret: xrpddatavis-oauth2-alpha-config
+  service:
+    portNumber: 4180
 
 # a PersistentVolumeClaim mounted at mountPath, holding config.plots.db_path
 persistence:

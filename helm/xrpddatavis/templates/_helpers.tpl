@@ -58,3 +58,10 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+The oauth2-proxy sub-chart's Service name
+*/}}
+{{- define "xrpddatavis.oauth2ProxyName" -}}
+{{- printf "%s-oauth2-proxy" .Release.Name | trunc 63 | trimSuffix "-" -}}
+{{- end }}

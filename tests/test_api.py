@@ -1,8 +1,13 @@
+import asyncio
+import logging
 import re
 
+import pytest
+from fastapi import Request
 from fastapi.testclient import TestClient
 
 from conftest import backdate, xye
+from xrpddatavis import server
 from xrpddatavis.config import Config
 from xrpddatavis.endpoints import (
     CLEAR_PLOTS,
@@ -14,6 +19,7 @@ from xrpddatavis.endpoints import (
     UI,
 )
 from xrpddatavis.server import start_api
+from xrpddatavis.store import PlotStore
 
 
 def test_health(client):
@@ -25,12 +31,12 @@ def test_limits_come_from_config(client):
 
 
 def test_info_reports_the_beamline(client):
-    assert client.get(INFO).json() == {"beamline": "i11"}
+    assert client.get(INFO).json() == {"beamline": "i11", "logout_url": ""}
 
 
 def test_info_beamline_defaults_to_empty_string():
     with TestClient(start_api(Config())) as blank_client:
-        assert blank_client.get(INFO).json() == {"beamline": ""}
+        assert blank_client.get(INFO).json() == {"beamline": "", "logout_url": ""}
 
 
 def test_frontend_is_served(client):
@@ -271,3 +277,73 @@ def test_revision_changes_when_the_store_changes(client):
     start = client.get(LIVEPLOTS).json()["revision"]
     client.post(PLOT, json=xye("p"))
     assert client.get(LIVEPLOTS).json()["revision"] > start
+
+
+def test_events_stream_revisions_then_keepalives(config: Config, monkeypatch):
+    """Called directly: the test client can't end a never-ending stream."""
+    monkeypatch.setattr(server, "EVENT_POLL_SECONDS", 0.0)
+    monkeypatch.setattr(server, "EVENT_KEEPALIVE_SECONDS", 0.0)
+    app = start_api(config)
+    checks = 0
+
+    async def receive():
+        # the browser stays connected for two checks, then leaves
+        nonlocal checks
+        checks += 1
+        if checks < 3:
+            await asyncio.sleep(1)  # still connected
+        return {"type": "http.disconnect"}
+
+    async def read_stream() -> list[str]:
+        request = Request({"type": "http", "app": app, "headers": []}, receive)
+        response = await server.events(request)
+        return [str(chunk) async for chunk in response.body_iterator]
+
+    assert asyncio.run(read_stream()) == [
+        'data: {"revision": 0}\n\n',
+        ": keep-alive\n\n",
+    ]
+    app.state.store.close()
+
+
+def test_suppress_polling_logs(config: Config):
+    access_log = logging.getLogger("uvicorn.access")
+    before = list(access_log.filters)
+    config.server.suppress_polling_logs = True
+    try:
+        app = start_api(config)
+        app.state.store.close()
+        assert len(access_log.filters) == len(before) + 1
+    finally:
+        access_log.filters = before
+
+
+def test_missing_frontend_build_is_reported(config: Config, tmp_path, monkeypatch):
+    monkeypatch.setattr(server, "STATIC_DIR", tmp_path)
+    # keep hold of the store start_api opens before it fails, to close it
+    stores: list[PlotStore] = []
+    monkeypatch.setattr(
+        server,
+        "PlotStore",
+        lambda **kwargs: stores.append(PlotStore(**kwargs)) or stores[-1],
+    )
+    with pytest.raises(RuntimeError, match="Frontend build not found"):
+        start_api(config)
+    stores[0].close()
+
+
+def test_cleanup_loop_purges_on_schedule(monkeypatch):
+    store = PlotStore(ttl_seconds=60, max_plots=3, db_path=":memory:")
+    purges = []
+    monkeypatch.setattr(store, "purge_expired", lambda: purges.append(1))
+
+    async def run_briefly():
+        task = asyncio.create_task(server._cleanup_loop(store, 0))
+        await asyncio.sleep(0.01)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(run_briefly())
+    store.close()
+    assert purges

@@ -18,3 +18,7 @@ CLEAR_PLOTS = "/plots"  # DELETE every plot
 # --- frontend ----------------------------------------------------------------
 UI = "/"
 STATIC = "/static"
+
+# --- auth --------------------------------------------------------------------
+# login, logout and the session cookie are oauth2-proxy's own /oauth2/* routes
+USER = "/user"  # GET the logged-in user (204 when auth is off)

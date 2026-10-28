@@ -4,12 +4,20 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import APIRouter, Body, FastAPI, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 import xrpddatavis
 from xrpddatavis._version import __version__
+from xrpddatavis.auth.oidc import (
+    OIDCProvider,
+    User,
+    access_token,
+    build_access_token_check,
+    current_user,
+)
+from xrpddatavis.auth.sessions import SessionAccess
 from xrpddatavis.config import Config
 from xrpddatavis.endpoints import (
     CLEAR_PLOTS,
@@ -24,6 +32,7 @@ from xrpddatavis.endpoints import (
     REMOVE_PLOT,
     STATIC,
     UI,
+    USER,
 )
 from xrpddatavis.logger import logger, suppress_polling_logs
 from xrpddatavis.models import (
@@ -36,6 +45,11 @@ from xrpddatavis.models import (
 )
 from xrpddatavis.store import PlotStore
 
+# reachable without logging in: the probes, the page shell (the JS itself
+# holds no data - it fetches everything from ROUTER), and posting a plot, so
+# any script can send data without a token
+OPEN_ROUTER = APIRouter()
+# everything else - needs a valid access token when auth is enabled
 ROUTER = APIRouter()
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -54,7 +68,31 @@ def get_config(request: Request) -> Config:
     return request.app.state.config
 
 
-@ROUTER.get(HEALTH_ROUTE, tags=["health"])
+async def allowed_sessions(request: Request, sessions: set[str]) -> set[str]:
+    """The instrument sessions, out of `sessions`, the caller may see - all of
+    them when auth is off."""
+    access: SessionAccess | None = request.app.state.session_access
+    if access is None:
+        return sessions
+    return await access.allowed(access_token(request), sessions)
+
+
+async def can_see(request: Request, plot: PlotData) -> bool:
+    """Plots without an instrument session are visible to everyone."""
+    session = plot.data.get_instrument_session()
+    return session is None or session in await allowed_sessions(request, {session})
+
+
+async def visible_plot(request: Request, id: str) -> PlotData:
+    """The plot, or a 404 if it doesn't exist or the caller can't see it -
+    the same answer either way, so hidden plots don't give themselves away."""
+    plot = get_store(request).get(id)
+    if plot is None or not await can_see(request, plot):
+        raise HTTPException(status_code=404, detail=f"No plot with id {id}")
+    return plot
+
+
+@OPEN_ROUTER.get(HEALTH_ROUTE, tags=["health"])
 async def health():
     return {"status": "ok"}
 
@@ -68,12 +106,30 @@ async def limits(request: Request) -> dict[str, int]:
 
 @ROUTER.get(INFO, tags=["health"])
 async def info(request: Request) -> dict[str, str]:
-    """Static app metadata for the UI title bar - currently just the beamline."""
+    """Static app metadata for the UI title bar: the beamline, and where its
+    logout button goes ("" when auth is off)."""
     config = get_config(request)
-    return {"beamline": config.beamline.name}
+    oidc: OIDCProvider | None = request.app.state.oidc
+    return {
+        "beamline": config.beamline.name,
+        "logout_url": oidc.logout_url if oidc else "",
+    }
 
 
-@ROUTER.post(PLOT, tags=["plots"], status_code=201)
+@ROUTER.get(
+    USER,
+    tags=["auth"],
+    response_model=User,
+    responses={204: {"description": "Authentication is turned off"}},
+)
+async def user(request: Request):
+    """The logged-in user, from their access token."""
+    if getattr(request.state, "claims", None) is None:
+        return Response(status_code=204)
+    return current_user(request)
+
+
+@OPEN_ROUTER.post(PLOT, tags=["plots"], status_code=201)
 async def plot(
     request: Request,
     body: PlotRequest = Body(
@@ -143,10 +199,18 @@ async def plot(
 
 @ROUTER.get(LIVEPLOTS, tags=["plots"])
 async def liveplots(request: Request) -> LivePlots:
-    """Metadata for every live plot - what the table on the left is built from."""
+    """Metadata for every live plot the caller can see - what the table on the
+    left is built from."""
     store = get_store(request)
+    summaries = store.summaries()
+    sessions = {s.instrument_session for s in summaries if s.instrument_session}
+    allowed = await allowed_sessions(request, sessions)
     return LivePlots(
-        plots=store.summaries(),
+        plots=[
+            s
+            for s in summaries
+            if s.instrument_session is None or s.instrument_session in allowed
+        ],
         max_plots=store.max_plots,
         ttl_seconds=store.ttl_seconds,
         revision=store.revision,
@@ -156,16 +220,14 @@ async def liveplots(request: Request) -> LivePlots:
 @ROUTER.get(PLOT_DATA, tags=["plots"])
 async def plot_data(request: Request, id: str) -> PlotData:
     """The full arrays for one plot."""
-    stored = get_store(request).get(id)
-    if stored is None:
-        raise HTTPException(status_code=404, detail=f"No plot with id {id}")
-    return stored
+    return await visible_plot(request, id)
 
 
 @ROUTER.patch(EDIT_PLOT, tags=["plots"])
 async def edit_plot(request: Request, id: str, changes: PlotUpdate) -> PlotSummary:
     """Rename a plot, change how it is drawn, or move it to another colour."""
     store = get_store(request)
+    await visible_plot(request, id)
     updated = store.update(id, changes)
     if updated is None:
         raise HTTPException(status_code=404, detail=f"No plot with id {id}")
@@ -174,6 +236,7 @@ async def edit_plot(request: Request, id: str, changes: PlotUpdate) -> PlotSumma
 
 @ROUTER.delete(REMOVE_PLOT, tags=["plots"])
 async def remove_plot(request: Request, id: str) -> dict[str, str]:
+    await visible_plot(request, id)
     removed = get_store(request).remove(id)
     if removed is None:
         raise HTTPException(status_code=404, detail=f"No plot with id {id}")
@@ -182,7 +245,14 @@ async def remove_plot(request: Request, id: str) -> dict[str, str]:
 
 @ROUTER.delete(CLEAR_PLOTS, tags=["plots"])
 async def clear_plots(request: Request) -> dict[str, int]:
-    return {"removed": get_store(request).clear()}
+    """Delete every plot the caller can see."""
+    store = get_store(request)
+    if request.app.state.session_access is None:
+        return {"removed": store.clear()}
+    removed = [
+        store.remove(plot.id) for plot in store.list() if await can_see(request, plot)
+    ]
+    return {"removed": sum(plot is not None for plot in removed)}
 
 
 @ROUTER.get(EVENTS, tags=["plots"])
@@ -190,7 +260,8 @@ async def events(request: Request) -> StreamingResponse:
     """Server-sent events: one message whenever the set of plots changes.
 
     The payload is only a revision number - the frontend re-fetches
-    ``/liveplots`` when it sees one it hasn't handled.
+    ``/liveplots`` (which only lists what the caller can see) when it sees one
+    it hasn't handled.
     """
     store = get_store(request)
 
@@ -223,7 +294,7 @@ async def events(request: Request) -> StreamingResponse:
     )
 
 
-@ROUTER.get(UI, include_in_schema=False)
+@OPEN_ROUTER.get(UI, include_in_schema=False)
 async def ui() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
 
@@ -290,7 +361,21 @@ def start_api(config: Config | None = None) -> FastAPI:
         db_path=config.plots.db_path,
     )
 
-    app.include_router(ROUTER)
+    app.state.oidc = None
+    app.state.session_access = None
+    dependencies = []
+    if config.auth.enabled:
+        app.state.oidc = OIDCProvider(config.auth)
+        app.state.session_access = SessionAccess(
+            config.auth.opa_url, config.auth.client_audience
+        )
+        dependencies.append(Depends(build_access_token_check(app.state.oidc)))
+        logger.info("auth enabled - accepting tokens from %s", config.auth.issuer)
+    else:
+        logger.warning("auth disabled - anyone who can reach the server can use it")
+
+    app.include_router(OPEN_ROUTER)
+    app.include_router(ROUTER, dependencies=dependencies)
 
     if not (STATIC_DIR / "index.html").exists():
         # The frontend (frontend/readme.md) is never committed - it's built
