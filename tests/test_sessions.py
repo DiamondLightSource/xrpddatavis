@@ -139,3 +139,13 @@ def test_delete_all_only_deletes_visible_plots(client, opa):
     other = {"Authorization": f"Bearer {token(fedid='xyz98765')}"}
     plots = client.get(LIVEPLOTS, headers=other).json()["plots"]
     assert [plot["name"] for plot in plots] == ["theirs"]
+
+
+def test_expired_answers_are_asked_again_and_pruned(client, opa, monkeypatch):
+    monkeypatch.setattr(sessions, "CACHE_SECONDS", 0)
+    monkeypatch.setattr(sessions, "CACHE_PRUNE_SIZE", 0)
+    post(client, "mine", "cm12345-1")
+    visible(client)
+    visible(client)
+    assert len(opa.questions) == 2
+    assert len(client.app.state.session_access._cache) == 1

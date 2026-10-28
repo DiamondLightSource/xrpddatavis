@@ -91,3 +91,32 @@ def test_build_stops_on_failed_step(frontend_dir, monkeypatch):
     assert result.exit_code == 1
     assert "'npm ci' failed with exit code 2" in result.output
     assert calls == [["/usr/bin/npm", "ci"]]
+
+
+@pytest.fixture
+def uvicorn_calls(monkeypatch: pytest.MonkeyPatch) -> dict:
+    """Stand in for uvicorn: record what serve would run instead of serving."""
+    import uvicorn
+
+    calls: dict = {}
+    monkeypatch.setattr(uvicorn, "run", lambda app, **kwargs: calls.update(kwargs))
+    monkeypatch.delenv("CONFIG_PATH", raising=False)
+    return calls
+
+
+def test_serve_runs_uvicorn(uvicorn_calls):
+    result = CliRunner().invoke(main, ["serve"])
+    assert result.exit_code == 0, result.output
+    assert uvicorn_calls["port"] == 8000
+
+
+def test_serve_host_and_port_overrides(uvicorn_calls):
+    result = CliRunner().invoke(
+        main, ["--host", "127.0.0.1", "--port", "9000", "serve"]
+    )
+    assert result.exit_code == 0, result.output
+    assert (uvicorn_calls["host"], uvicorn_calls["port"]) == ("127.0.0.1", 9000)
+
+
+def test_no_subcommand_says_so():
+    assert "Please invoke subcommand!" in CliRunner().invoke(main, []).output
