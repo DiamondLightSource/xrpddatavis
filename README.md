@@ -230,7 +230,8 @@ python examples/feed_demo.py --start-filenumber 100 --instrument-session mg30000
 | `DELETE` | `/plots` | Delete every plot |
 | `GET` | `/events` | Server-sent events - one message whenever the set of plots changes |
 | `GET` | `/limits` | `max_plots` and `ttl_seconds` |
-| `GET` | `/info` | Static app metadata for the UI title bar (currently just `beamline`) |
+| `GET` | `/info` | Static app metadata for the UI title bar: `beamline`, and `logout_url` |
+| `GET` | `/user` | The logged-in user (`fedid`, `name`, `email`); `204` when auth is off |
 | `GET` | `/healthz` | Liveness/readiness |
 | `GET` | `/` | The web frontend |
 
@@ -260,6 +261,89 @@ cleanup:
 
 The same keys live under `config:` in `helm/xrpddatavis/values.yaml`, so
 `--set config.plots.max_plots=50` changes the limit on a deployment.
+
+## Authentication
+
+Deployed, users log in with their Diamond account, the same way Atlas and
+BlueAPI do it:
+
+- **oauth2-proxy** (part of the Helm chart) sits in front of the app and
+  sends anyone not logged in to Keycloak (`identity.diamond.ac.uk`). It then
+  forwards each request with the user's access token.
+- **The app** checks that token (signature, issuer, audience, expiry) and
+  reads the user's `fedid` from it (`src/xrpddatavis/auth/oidc.py`).
+- Without a token, every route returns `401` except `POST /plot`, `/healthz`
+  and the page itself. Anyone can send plots.
+
+Use the user in an endpoint:
+
+```python
+from xrpddatavis.auth.oidc import AccessToken, CurrentUser
+
+@ROUTER.get("/my-plots")
+async def my_plots(user: CurrentUser, token: AccessToken):
+    user.fedid  # also user.name, user.email; token is the raw access token
+```
+
+Settings are `auth:` in `config.yaml`. Locally, `enabled: false` (no
+login). The Helm chart turns it on and sets the issuer and audience from
+`auth:` in `values.yaml`. Deploying, including the Keycloak client and the
+sealed secret, is covered in [helm/README.md](helm/README.md).
+
+### Testing against the real Keycloak locally
+
+Nothing runs locally except the app. You get a real token with `curl` and
+send it to the app. This checks the client ID and secret, the `fedid` claim
+and the audience before you seal anything. Only the kubeseal step and the
+browser login can't be checked locally.
+
+One-off:
+
+- Ask for **OAuth 2.0 Device Authorization Grant** to be enabled on the
+  Keycloak client, and the **`fedid`** client scope as a default scope.
+- Put the decrypted values in `.env` at the repo root. It's git-ignored;
+  never commit it.
+
+  ```bash
+  CLIENT_ID=<client id>
+  CLIENT_SECRET=<decrypted client secret>
+  ```
+
+Each time:
+
+1. Set `auth.enabled: true` in `config.yaml`, then run `xrpddatavis serve`.
+2. Ask Keycloak for a login code, then open the `verification_uri_complete`
+   link it prints and log in:
+
+   ```bash
+   set -a; . ./.env; set +a
+   KC=https://identity.diamond.ac.uk/realms/dls/protocol/openid-connect
+   curl -s $KC/auth/device -d client_id=$CLIENT_ID -d client_secret=$CLIENT_SECRET \
+     -d scope=openid | tee /tmp/device.json
+   ```
+
+3. Swap the code for a token, then call the app:
+
+   ```bash
+   TOKEN=$(curl -s $KC/token -d client_id=$CLIENT_ID -d client_secret=$CLIENT_SECRET \
+     -d grant_type=urn:ietf:params:oauth:grant-type:device_code \
+     -d device_code=$(python -c 'import json; print(json.load(open("/tmp/device.json"))["device_code"])') \
+     | python -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
+
+   curl -H "Authorization: Bearer $TOKEN" localhost:8000/user   # 200, your fedid
+   curl -i localhost:8000/liveplots                             # 401, no token
+   ```
+
+4. Set `auth.enabled` back to `false` for UI work. Browser login only works
+   when deployed, behind oauth2-proxy.
+
+| Symptom | Cause |
+| --- | --- |
+| step 2: `unauthorized_client` | device grant not enabled on the client |
+| step 2: `invalid_client` | wrong client ID or secret, so it would fail deployed too |
+| step 3: `authorization_pending` | finish logging in at the step 2 link first |
+| `Invalid access token: Audience doesn't match` | `auth.client_audience` doesn't match the token's `aud` |
+| `/user` gives `403 ... no fedid claim` | the `fedid` scope isn't a default scope on the client |
 
 ## Frontend notes
 

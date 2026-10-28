@@ -1,108 +1,149 @@
-import base64
+"""Checks the access tokens oauth2-proxy forwards to the server.
+
+oauth2-proxy (deployed alongside the app by the Helm chart) runs the Keycloak
+login and adds ``Authorization: Bearer <access token>`` to every request it
+passes on. The token is a JWT signed by Keycloak, so the server can verify it
+locally against Keycloak's published public keys (the JWKS) - no call to
+Keycloak per request, and the server never needs the client secret. This is
+the same approach BlueAPI takes.
+"""
+
+from functools import cached_property
+from typing import Annotated, Any
 from urllib.parse import quote
 
+import jwt
 import requests
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel
 
-from xrpddatavis.auth.bearer import OAuth2PasswordBearerCookie
-from xrpddatavis.config import Config
-
-
-def b64encode(input: str):
-    return base64.b64encode(input.encode()).decode()
+from xrpddatavis.config import AuthConfig
 
 
-def _discovery():
-    return requests.get(Config.auth.endpoint).json()
+class User(BaseModel):
+    """Who made a request, read from their verified access token."""
+
+    fedid: str
+    name: str | None = None
+    email: str | None = None
 
 
-"""It is good practice to get your endpoints from a discovery endpoint, rather than
-hardcoding them in. That makes it easier to move to different endpoints in the future"""
+class OIDCProvider:
+    """The parts of the issuer's discovery document the server needs.
 
-oidc_endpoints = _discovery()
-client_creds = b64encode(":".join([Config.auth.client_id, Config.auth.client_secret]))
+    Fetched once, the first time anything here is used.
+    """
 
-"""This scheme extracts the token from the relevant header/cookie. You can add it as a
-dependency in order to use it whenever relevant. Note in your documentation (if using
-FastAPI) that all endpoints that ultimately require authentication (this scheme) will
-be marked as'protected' with a padlock."""
-oauth2_scheme: OAuth2 = OAuth2PasswordBearerCookie(
-    token_url=oidc_endpoints["token_endpoint"]
+    def __init__(self, config: AuthConfig):
+        self.config = config
+
+    @cached_property
+    def _discovery(self) -> dict[str, Any]:
+        response = requests.get(self.config.well_known_url, timeout=10)
+        response.raise_for_status()
+        return response.json()
+
+    @property
+    def issuer(self) -> str:
+        return self._discovery["issuer"]
+
+    @property
+    def jwks_uri(self) -> str:
+        return self._discovery["jwks_uri"]
+
+    @property
+    def end_session_endpoint(self) -> str:
+        return self._discovery["end_session_endpoint"]
+
+    @property
+    def logout_url(self) -> str:
+        """oauth2-proxy's sign-out, then on to Keycloak's to end that session
+        too - otherwise the next visit would log straight back in."""
+        end_session = quote(self.end_session_endpoint, safe="")
+        return f"{self.config.logout_redirect_endpoint}?rd={end_session}"
+
+
+# also marks the routes that use it with a padlock in the /docs page
+bearer = HTTPBearer(
+    auto_error=False,
+    description="Keycloak access token - added by oauth2-proxy when deployed",
 )
 
 
-class Auth:
-    """A sample authentication class, containing basic actions"""
+def _unauthorised(detail: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=detail,
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
-    fedid = None
 
-    def __init__(self, token=Depends(oauth2_scheme)):
-        """If the application you are developing is not a FastAPI application, and does
-        not support dependency injections in a similar way, you can pass tokens
-        explicitly, use decorators and other alternatives.
+def build_access_token_check(provider: OIDCProvider):
+    """A dependency that rejects any request without a valid access token,
+    and keeps the verified claims on ``request.state`` for ``current_user``."""
 
-        For example, in Flask, you could use decorators on protected endpoints that
-        looks for a token in authorisation headers."""
-        self.fedid = self.auth(token)
+    # caches the signing keys, refetching only when a token names a new one
+    jwks = jwt.PyJWKClient(provider.jwks_uri)
 
-    @classmethod
-    def auth(cls, token: str):
-        response = requests.get(
-            oidc_endpoints["userinfo_endpoint"],
-            headers={"Authorization": f"Bearer {token}"},
-        )
+    def check_access_token(
+        request: Request,
+        credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
+    ) -> None:
+        if credentials is None:
+            raise _unauthorised("Not authenticated")
+        token = credentials.credentials
 
-        """401, as a HTTP error code, means unauthorised, whilst 403 means forbidden.
-        In this context, unauthorised means that the service could not validate your
-        identity, forbidden means that while you were authenticated, the service decided
-        you should not have access to this resource"""
-        if response.status_code == 401:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid user token",
+        try:
+            signing_key = jwks.get_signing_key_from_jwt(token)
+            claims = jwt.decode(
+                token,
+                signing_key.key,
+                # only the algorithm of the key Keycloak signed with, so a
+                # token can't pick a weaker one for itself
+                algorithms=[signing_key.algorithm_name],
+                audience=provider.config.client_audience,
+                issuer=provider.issuer,
             )
-
-        return response.json().get("id")
-
-    @classmethod
-    def get_token(cls, redirect_uri: str, code: str):
-        """To get a token in code flow, the user must get a code first.
-        That can be done by hitting the authentication endpoint while passing
-        'code' as your responseType"""
-
-        endpoint = (
-            f"{oidc_endpoints['token_endpoint']}?grant_type=authorization_code"
-            f"&code={code}"
-            f"&redirect_uri={redirect_uri}"
-        )
-
-        response = requests.get(
-            endpoint, headers={"Authorization": f"Basic {client_creds}"}
-        )
-        if response.status_code == 401:
+        except jwt.PyJWKClientConnectionError as error:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid user code",
-            )
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Could not fetch the identity provider's keys: {error}",
+            ) from error
+        except jwt.PyJWTError as error:
+            raise _unauthorised(f"Invalid access token: {error}") from error
 
-        return response.json()
+        request.state.access_token = token
+        request.state.claims = claims
 
-    @classmethod
-    def get_auth_redirect(cls, redirect: str, response_type: str):
-        """Redirects user to the CAS authentication page. It is up to the redirected
-        page to store and manage the token.
+    return check_access_token
 
-        If your application is strictly a CLI interface, you could ask the user to
-        enter it later on (or, even better, use device authentication flow)"""
-        # TODO: document device authentication flow
 
-        return (
-            oidc_endpoints["authorization_endpoint"]
-            + f"?response_type={response_type}&client_id={Config.auth.client_id}&redirect_uri="  # noqa: E501
-            + quote(redirect)
+def current_user(request: Request) -> User:
+    """The user behind the request. Only usable on routes behind the token
+    check, i.e. when ``auth.enabled`` is true."""
+    claims: dict[str, Any] | None = getattr(request.state, "claims", None)
+    if claims is None:
+        raise _unauthorised("Not authenticated")
+
+    fedid = claims.get("fedid")
+    if not fedid:
+        # a valid token, but not one for a person - e.g. a service account
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access token does not identify a user (no fedid claim)",
         )
+    return User(fedid=fedid, name=claims.get("name"), email=claims.get("email"))
 
-    @classmethod
-    def get_logout_redirect(cls):
-        return oidc_endpoints["end_session_endpoint"]
+
+def access_token(request: Request) -> str:
+    """The raw access token, e.g. to call another service as the user."""
+    token: str | None = getattr(request.state, "access_token", None)
+    if token is None:
+        raise _unauthorised("Not authenticated")
+    return token
+
+
+# use these as endpoint parameters, e.g. `async def f(user: CurrentUser)`
+CurrentUser = Annotated[User, Depends(current_user)]
+AccessToken = Annotated[str, Depends(access_token)]

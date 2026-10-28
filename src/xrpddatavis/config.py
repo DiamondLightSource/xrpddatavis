@@ -41,16 +41,33 @@ class PlotsConfig(BaseModel):
 
 
 class AuthConfig(BaseModel):
-    enabled: bool = True
-    well_known_url: str = (
-        "https://identity.diamond.ac.uk/realms/dls/.well-known/openid-configuration"
-    )
-    client_id: str
-    client_secret: str
-    cookie_key: str
+    """How the server checks who is calling it.
 
+    Login itself (the Keycloak redirect, the client secret and the session
+    cookie) is handled by oauth2-proxy in front of the app - see the Helm
+    chart. oauth2-proxy forwards each request with an
+    ``Authorization: Bearer <access token>`` header, and the server only has
+    to verify that token against the issuer's public keys.
+    """
+
+    # off by default so a local `xrpddatavis serve` works without Keycloak;
+    # the Helm chart turns it on
+    enabled: bool = False
+
+    # the Keycloak realm that issues the tokens - its discovery document lives
+    # at <issuer>/.well-known/openid-configuration
+    issuer: str = "https://identity.diamond.ac.uk/realms/dls"
+
+    # the "aud" claim a token must carry to be accepted
     client_audience: str = "account"
-    logout_redirect_endpoint: str = "oauth2/sign_out"
+
+    # where the frontend sends the user to log out - oauth2-proxy's sign-out
+    # route, which clears its cookie then ends the Keycloak session too
+    logout_redirect_endpoint: str = "/oauth2/sign_out"
+
+    @property
+    def well_known_url(self) -> str:
+        return self.issuer.rstrip("/") + "/.well-known/openid-configuration"
 
 
 class CleanupConfig(BaseModel):

@@ -20,7 +20,8 @@ beforeEach(() => {
   // no EventSource in jsdom: the app falls back to polling
   vi.stubGlobal("Plotly", { react: vi.fn(), purge: vi.fn(), relayout: vi.fn(), Plots: { resize: vi.fn() } });
   vi.spyOn(api, "liveplots").mockResolvedValue({ plots, max_plots: 10, ttl_seconds: 3600, revision: 1 });
-  vi.spyOn(api, "info").mockResolvedValue({ beamline: "i11" });
+  vi.spyOn(api, "info").mockResolvedValue({ beamline: "i11", logout_url: "" });
+  vi.spyOn(api, "user").mockResolvedValue(undefined);
   vi.spyOn(api, "plot").mockImplementation(async (id) => plotData(id));
   vi.spyOn(api, "edit").mockResolvedValue(undefined);
   vi.spyOn(api, "remove").mockResolvedValue(undefined);
@@ -52,6 +53,12 @@ describe("App", () => {
     expect(status()).toHaveTextContent("2 plots · 1 selected");
     expect(screen.getByText("2 / 10 plots")).toBeInTheDocument();
     expect(screen.getByText(/^updated /)).toBeInTheDocument();
+  });
+
+  it("shows the logged-in user when auth is on", async () => {
+    vi.spyOn(api, "user").mockResolvedValue({ fedid: "abc12345", name: "Ada Lovelace", email: null });
+    await renderApp();
+    expect(await screen.findByText("Ada Lovelace")).toBeInTheDocument();
   });
 
   it("ticks the newest plot on first load", async () => {

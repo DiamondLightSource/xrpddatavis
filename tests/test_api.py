@@ -25,12 +25,12 @@ def test_limits_come_from_config(client):
 
 
 def test_info_reports_the_beamline(client):
-    assert client.get(INFO).json() == {"beamline": "i11"}
+    assert client.get(INFO).json() == {"beamline": "i11", "logout_url": ""}
 
 
 def test_info_beamline_defaults_to_empty_string():
     with TestClient(start_api(Config())) as blank_client:
-        assert blank_client.get(INFO).json() == {"beamline": ""}
+        assert blank_client.get(INFO).json() == {"beamline": "", "logout_url": ""}
 
 
 def test_frontend_is_served(client):

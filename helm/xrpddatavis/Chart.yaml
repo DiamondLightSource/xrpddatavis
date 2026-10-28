@@ -5,3 +5,12 @@ type: application
 
 version: 0.1.0
 appVersion: "v0.1.0"
+
+# oauth2-proxy runs the Keycloak login in front of the app - the same chart
+# and version Atlas (DiamondLightSource/atlas, helm/) uses. Only deployed
+# when auth.enabled is true.
+dependencies:
+  - name: oauth2-proxy
+    repository: https://oauth2-proxy.github.io/manifests
+    version: 10.1.0
+    condition: auth.enabled

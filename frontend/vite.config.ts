@@ -35,6 +35,7 @@ export default defineConfig({
       "/limits": "http://localhost:8000",
       "/info": "http://localhost:8000",
       "/healthz": "http://localhost:8000",
+      "/user": "http://localhost:8000",
     },
   },
 });

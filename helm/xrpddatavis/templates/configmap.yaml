@@ -1,7 +1,15 @@
+{{- /* auth settings come from the top-level `auth` values, so the issuer the
+server trusts is always the one oauth2-proxy logs users in against */ -}}
+{{- $config := deepCopy .Values.config -}}
+{{- $_ := set $config "auth" (dict
+    "enabled" .Values.auth.enabled
+    "issuer" .Values.auth.issuer
+    "client_audience" .Values.auth.client_audience
+) -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{ include "xrpddatavis.fullname" . }}-config
 data:
   config.yaml: |-
-    {{- toYaml .Values.config | nindent 4 }}
+    {{- toYaml $config | nindent 4 }}

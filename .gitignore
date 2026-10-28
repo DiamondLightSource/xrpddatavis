@@ -88,4 +88,10 @@ frontend/coverage/
 /src/xrpddatavis/static/
 
 # local sqlite plot store (config plots.db_path)
-plots.db*
+plots*.db*
+
+# fetched by `helm dependency update` (CI does this before packaging)
+helm/xrpddatavis/charts/
+
+# Keycloak client secret for testing auth locally - see README.md
+.env

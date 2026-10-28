@@ -4,12 +4,18 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import APIRouter, Body, FastAPI, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 import xrpddatavis
 from xrpddatavis._version import __version__
+from xrpddatavis.auth.oidc import (
+    OIDCProvider,
+    User,
+    build_access_token_check,
+    current_user,
+)
 from xrpddatavis.config import Config
 from xrpddatavis.endpoints import (
     CLEAR_PLOTS,
@@ -24,6 +30,7 @@ from xrpddatavis.endpoints import (
     REMOVE_PLOT,
     STATIC,
     UI,
+    USER,
 )
 from xrpddatavis.logger import logger, suppress_polling_logs
 from xrpddatavis.models import (
@@ -36,6 +43,11 @@ from xrpddatavis.models import (
 )
 from xrpddatavis.store import PlotStore
 
+# reachable without logging in: the probes, the page shell (the JS itself
+# holds no data - it fetches everything from ROUTER), and posting a plot, so
+# any script can send data without a token
+OPEN_ROUTER = APIRouter()
+# everything else - needs a valid access token when auth is enabled
 ROUTER = APIRouter()
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -54,7 +66,7 @@ def get_config(request: Request) -> Config:
     return request.app.state.config
 
 
-@ROUTER.get(HEALTH_ROUTE, tags=["health"])
+@OPEN_ROUTER.get(HEALTH_ROUTE, tags=["health"])
 async def health():
     return {"status": "ok"}
 
@@ -68,12 +80,30 @@ async def limits(request: Request) -> dict[str, int]:
 
 @ROUTER.get(INFO, tags=["health"])
 async def info(request: Request) -> dict[str, str]:
-    """Static app metadata for the UI title bar - currently just the beamline."""
+    """Static app metadata for the UI title bar: the beamline, and where its
+    logout button goes ("" when auth is off)."""
     config = get_config(request)
-    return {"beamline": config.beamline.name}
+    oidc: OIDCProvider | None = request.app.state.oidc
+    return {
+        "beamline": config.beamline.name,
+        "logout_url": oidc.logout_url if oidc else "",
+    }
 
 
-@ROUTER.post(PLOT, tags=["plots"], status_code=201)
+@ROUTER.get(
+    USER,
+    tags=["auth"],
+    response_model=User,
+    responses={204: {"description": "Authentication is turned off"}},
+)
+async def user(request: Request):
+    """The logged-in user, from their access token."""
+    if getattr(request.state, "claims", None) is None:
+        return Response(status_code=204)
+    return current_user(request)
+
+
+@OPEN_ROUTER.post(PLOT, tags=["plots"], status_code=201)
 async def plot(
     request: Request,
     body: PlotRequest = Body(
@@ -223,7 +253,7 @@ async def events(request: Request) -> StreamingResponse:
     )
 
 
-@ROUTER.get(UI, include_in_schema=False)
+@OPEN_ROUTER.get(UI, include_in_schema=False)
 async def ui() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
 
@@ -290,7 +320,17 @@ def start_api(config: Config | None = None) -> FastAPI:
         db_path=config.plots.db_path,
     )
 
-    app.include_router(ROUTER)
+    app.state.oidc = None
+    dependencies = []
+    if config.auth.enabled:
+        app.state.oidc = OIDCProvider(config.auth)
+        dependencies.append(Depends(build_access_token_check(app.state.oidc)))
+        logger.info("auth enabled - accepting tokens from %s", config.auth.issuer)
+    else:
+        logger.warning("auth disabled - anyone who can reach the server can use it")
+
+    app.include_router(OPEN_ROUTER)
+    app.include_router(ROUTER, dependencies=dependencies)
 
     if not (STATIC_DIR / "index.html").exists():
         # The frontend (frontend/readme.md) is never committed - it's built
