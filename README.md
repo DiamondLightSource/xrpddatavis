@@ -201,22 +201,9 @@ five Type tabs and a File # chip per scan appear on the left immediately - click
 to one scan, or **Reset** to clear both. Tick rows and switch between Overlay,
 Offset and Grid on the right.
 
-Other useful invocations:
-
-```bash
-# just the total-scattering products, five scans of them
-python examples/feed_demo.py --count 5 --types gr sq fq
-
-# one pxrd trace updating in place for a minute, as a live scan would
-python examples/feed_demo.py --live --interval 2 --count 30
-
-# a second "sample" starting at file number 100, so you can compare two sets
-python examples/feed_demo.py --start-filenumber 100
-
-# a second instrument session - now the title bar's session picker has two
-# entries to switch between
-python examples/feed_demo.py --start-filenumber 100 --instrument-session mg30000-1
-```
+To post something different (more scans, other data types, another file
+number or instrument session), change the `post_scans(...)` call at the
+bottom of the script.
 
 ## Endpoints
 
