@@ -311,7 +311,8 @@ def test_suppress_polling_logs(config: Config):
     before = list(access_log.filters)
     config.server.suppress_polling_logs = True
     try:
-        start_api(config)
+        app = start_api(config)
+        app.state.store.close()
         assert len(access_log.filters) == len(before) + 1
     finally:
         access_log.filters = before
@@ -319,8 +320,16 @@ def test_suppress_polling_logs(config: Config):
 
 def test_missing_frontend_build_is_reported(config: Config, tmp_path, monkeypatch):
     monkeypatch.setattr(server, "STATIC_DIR", tmp_path)
+    # keep hold of the store start_api opens before it fails, to close it
+    stores: list[PlotStore] = []
+    monkeypatch.setattr(
+        server,
+        "PlotStore",
+        lambda **kwargs: stores.append(PlotStore(**kwargs)) or stores[-1],
+    )
     with pytest.raises(RuntimeError, match="Frontend build not found"):
         start_api(config)
+    stores[0].close()
 
 
 def test_cleanup_loop_purges_on_schedule(monkeypatch):

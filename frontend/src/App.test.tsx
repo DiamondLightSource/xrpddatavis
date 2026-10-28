@@ -63,7 +63,8 @@ describe("App", () => {
 
   it("ticks the newest plot on first load", async () => {
     await renderApp();
-    expect(screen.getByRole("checkbox", { name: "Show Beta" })).toBeChecked();
+    // the newest plot is ticked by an effect after the list renders - wait for it
+    await waitFor(() => expect(screen.getByRole("checkbox", { name: "Show Beta" })).toBeChecked());
     expect(screen.getByRole("checkbox", { name: "Show Alpha" })).not.toBeChecked();
   });
 
@@ -75,7 +76,8 @@ describe("App", () => {
       revision: 1,
     });
     await renderApp();
-    expect(screen.getByRole("checkbox", { name: "Show Beta" })).toBeChecked();
+    // the newest plot is ticked by an effect after the list renders - wait for it
+    await waitFor(() => expect(screen.getByRole("checkbox", { name: "Show Beta" })).toBeChecked());
     expect(screen.getByRole("checkbox", { name: "Show Alpha" })).not.toBeChecked();
   });
 

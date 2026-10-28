@@ -99,7 +99,12 @@ def uvicorn_calls(monkeypatch: pytest.MonkeyPatch) -> dict:
     import uvicorn
 
     calls: dict = {}
-    monkeypatch.setattr(uvicorn, "run", lambda app, **kwargs: calls.update(kwargs))
+
+    def fake_run(app, **kwargs):
+        calls.update(kwargs)
+        app.state.store.close()  # nothing serves it, so nothing else will
+
+    monkeypatch.setattr(uvicorn, "run", fake_run)
     monkeypatch.delenv("CONFIG_PATH", raising=False)
     return calls
 
