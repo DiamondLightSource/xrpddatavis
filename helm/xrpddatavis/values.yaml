@@ -78,9 +78,9 @@ config:
   plots:
     # maximum number of plots held - and therefore displayable - at once.
     # Posting past this evicts the oldest plot.
-    max_plots: 20
+    max_plots: 200
     # a plot is cleared automatically this long after it arrives
-    ttl_seconds: 3600
+    ttl_seconds: 43200
     # largest single trace accepted by POST /plot
     max_points: 1000000
     # sqlite file the plots are kept in. Must live under persistence.mountPath
