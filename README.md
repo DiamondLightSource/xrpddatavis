@@ -3,6 +3,8 @@
 [![PyPI](https://img.shields.io/pypi/v/xrpddatavis.svg)](https://pypi.org/project/xrpddatavis)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
+![Banner](images/XRPDDatavis_light.png)
+
 # xrpddatavis
 
 A deployable API that can be sent DataPlot json messages via POST and then plotted via a web front end.
