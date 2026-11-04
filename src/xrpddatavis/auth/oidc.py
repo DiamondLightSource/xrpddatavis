@@ -18,7 +18,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
-from xrpddatavis.config import AuthConfig
+from xrpddatavis.config import AuthServerConfig
 
 
 class User(BaseModel):
@@ -35,7 +35,7 @@ class OIDCProvider:
     Fetched once, the first time anything here is used.
     """
 
-    def __init__(self, config: AuthConfig):
+    def __init__(self, config: AuthServerConfig):
         self.config = config
 
     @cached_property
@@ -121,7 +121,7 @@ def build_access_token_check(provider: OIDCProvider):
 
 def current_user(request: Request) -> User:
     """The user behind the request. Only usable on routes behind the token
-    check, i.e. when ``auth.enabled`` is true."""
+    check, i.e. when ``auth_server.enabled`` is true."""
     claims: dict[str, Any] | None = getattr(request.state, "claims", None)
     if claims is None:
         raise _unauthorised("Not authenticated")

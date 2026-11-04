@@ -40,7 +40,7 @@ class PlotsConfig(BaseModel):
     db_path: str = "plots.db"
 
 
-class AuthConfig(BaseModel):
+class AuthServerConfig(BaseModel):
     """How the server checks who is calling it.
 
     Login itself (the Keycloak redirect, the client secret and the session
@@ -84,7 +84,7 @@ class Config(BaseSettings):
     beamline: BeamlineConfig = Field(default_factory=BeamlineConfig)
     plots: PlotsConfig = Field(default_factory=PlotsConfig)
     cleanup: CleanupConfig = Field(default_factory=CleanupConfig)
-    auth: AuthConfig = Field(default_factory=AuthConfig)
+    auth_server: AuthServerConfig = Field(default_factory=AuthServerConfig)
 
     model_config = SettingsConfigDict(
         env_nested_delimiter="__",

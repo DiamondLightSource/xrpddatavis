@@ -108,7 +108,7 @@ plots:
 cleanup:
   interval_seconds: 300         # how often expired plots are removed
 
-auth:
+auth_server:
   enabled: false                # see Authentication
 ```
 
@@ -128,7 +128,7 @@ BlueAPI do it:
 - Without a token, every route returns `401` except `POST /plot`, `/healthz`
   and the page itself. Anyone can send plots.
 - Each user only sees plots with no instrument session, plus those in
-  sessions Diamond's policy service (OPA, `auth.opa_url`) says they can access.
+  sessions Diamond's policy service (OPA, `auth_server.opa_url`) says they can access.
   Other plots are hidden: they can't be listed, fetched, edited or deleted.
 
 Use the user in an endpoint:
@@ -141,9 +141,9 @@ async def my_plots(user: CurrentUser, token: AccessToken):
     user.fedid  # also user.name, user.email; token is the raw access token
 ```
 
-Settings are `auth:` in `config.yaml`. Locally, `enabled: false` (no
-login). The Helm chart turns it on and sets the issuer and audience from
-`auth:` in `values.yaml`. Deploying, including the Keycloak client and the
+Settings are `auth_server:` in `config.yaml`. Locally, `enabled: false` (no
+login). The Helm chart turns it on and fills it in from `auth:` in
+`values.yaml`. Deploying, including the Keycloak client and the
 sealed secret, is covered in [helm/README.md](helm/README.md).
 
 ### Testing against the real Keycloak locally
@@ -167,7 +167,7 @@ One-off:
 
 Each time:
 
-1. Set `auth.enabled: true` in `config.yaml`, then run `xrpddatavis serve`.
+1. Set `auth_server.enabled: true` in `config.yaml`, then run `xrpddatavis serve`.
 2. Ask Keycloak for a login code, then open the `verification_uri_complete`
    link it prints and log in:
 
@@ -190,7 +190,7 @@ Each time:
    curl -i localhost:8000/liveplots                             # 401, no token
    ```
 
-4. Set `auth.enabled` back to `false` for UI work. Browser login only works
+4. Set `auth_server.enabled` back to `false` for UI work. Browser login only works
    when deployed, behind oauth2-proxy.
 
 | Symptom | Cause |
@@ -198,7 +198,7 @@ Each time:
 | step 2: `unauthorized_client` | device grant not enabled on the client |
 | step 2: `invalid_client` | wrong client ID or secret, so it would fail deployed too |
 | step 3: `authorization_pending` | finish logging in at the step 2 link first |
-| `Invalid access token: Audience doesn't match` | `auth.client_audience` doesn't match the token's `aud` |
+| `Invalid access token: Audience doesn't match` | `auth_server.client_audience` doesn't match the token's `aud` |
 | `/user` gives `403 ... no fedid claim` | the `fedid` scope isn't a default scope on the client |
 
 ## Using the page

@@ -364,13 +364,15 @@ def start_api(config: Config | None = None) -> FastAPI:
     app.state.oidc = None
     app.state.session_access = None
     dependencies = []
-    if config.auth.enabled:
-        app.state.oidc = OIDCProvider(config.auth)
+    if config.auth_server.enabled:
+        app.state.oidc = OIDCProvider(config.auth_server)
         app.state.session_access = SessionAccess(
-            config.auth.opa_url, config.auth.client_audience
+            config.auth_server.opa_url, config.auth_server.client_audience
         )
         dependencies.append(Depends(build_access_token_check(app.state.oidc)))
-        logger.info("auth enabled - accepting tokens from %s", config.auth.issuer)
+        logger.info(
+            "auth enabled - accepting tokens from %s", config.auth_server.issuer
+        )
     else:
         logger.warning("auth disabled - anyone who can reach the server can use it")
 

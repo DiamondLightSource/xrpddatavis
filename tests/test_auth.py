@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from conftest import AUDIENCE, DISCOVERY, ISSUER, OTHER_KEY, token, xye
 from xrpddatavis.auth import oidc
 from xrpddatavis.auth.oidc import OIDCProvider, access_token, current_user
-from xrpddatavis.config import AuthConfig, Config
+from xrpddatavis.config import AuthServerConfig, Config
 from xrpddatavis.endpoints import HEALTH_ROUTE, INFO, LIVEPLOTS, PLOT, UI, USER
 from xrpddatavis.server import start_api
 
@@ -23,9 +23,9 @@ def bearer(value: str) -> dict[str, str]:
 
 @pytest.fixture
 def auth_client(config: Config, fake_keycloak):
-    config.auth.enabled = True
-    config.auth.issuer = ISSUER
-    config.auth.client_audience = AUDIENCE
+    config.auth_server.enabled = True
+    config.auth_server.issuer = ISSUER
+    config.auth_server.client_audience = AUDIENCE
     with TestClient(start_api(config)) as test_client:
         yield test_client
 
@@ -97,8 +97,10 @@ def test_user_is_no_content_when_auth_is_off(client):
 
 
 def test_well_known_url_is_derived_from_the_issuer():
-    config = Config.model_validate({"auth": {"issuer": ISSUER + "/"}})
-    assert config.auth.well_known_url == (f"{ISSUER}/.well-known/openid-configuration")
+    config = Config.model_validate({"auth_server": {"issuer": ISSUER + "/"}})
+    assert config.auth_server.well_known_url == (
+        f"{ISSUER}/.well-known/openid-configuration"
+    )
 
 
 def test_unreachable_identity_provider_keys_give_503(
@@ -108,9 +110,9 @@ def test_unreachable_identity_provider_keys_give_503(
         raise jwt.PyJWKClientConnectionError("connection refused")
 
     monkeypatch.setattr(jwt.PyJWKClient, "fetch_data", unreachable)
-    config.auth.enabled = True
-    config.auth.issuer = ISSUER
-    config.auth.client_audience = AUDIENCE
+    config.auth_server.enabled = True
+    config.auth_server.issuer = ISSUER
+    config.auth_server.client_audience = AUDIENCE
     with TestClient(start_api(config)) as client:
         response = client.get(LIVEPLOTS, headers=bearer(token()))
     assert response.status_code == 503
@@ -139,7 +141,7 @@ def test_discovery_document_is_fetched_from_the_issuer(monkeypatch):
         return Response()
 
     monkeypatch.setattr(oidc.requests, "get", fake_get)
-    provider = OIDCProvider(AuthConfig(issuer=ISSUER))
+    provider = OIDCProvider(AuthServerConfig(issuer=ISSUER))
     assert provider.jwks_uri == DISCOVERY["jwks_uri"]
     assert provider.issuer == ISSUER
     assert fetched == [f"{ISSUER}/.well-known/openid-configuration"]

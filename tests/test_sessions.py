@@ -51,10 +51,10 @@ def opa(monkeypatch) -> FakeOpa:
 
 @pytest.fixture
 def client(config: Config, fake_keycloak, opa):
-    config.auth.enabled = True
-    config.auth.issuer = ISSUER
-    config.auth.client_audience = AUDIENCE
-    config.auth.opa_url = OPA_URL
+    config.auth_server.enabled = True
+    config.auth_server.issuer = ISSUER
+    config.auth_server.client_audience = AUDIENCE
+    config.auth_server.opa_url = OPA_URL
     config.plots.max_plots = 10
     with TestClient(start_api(config)) as test_client:
         yield test_client
