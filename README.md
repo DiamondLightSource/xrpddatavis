@@ -104,9 +104,7 @@ plots:
   max_plots: 20                 # oldest plot is removed when this is exceeded
   ttl_seconds: 3600             # each plot is removed this long after it arrives
   max_points: 1000000           # largest trace POST /plot accepts
-
-cleanup:
-  interval_seconds: 300         # how often expired plots are removed
+  cleanup_interval_seconds: 300 # how often expired plots are removed
 
 auth_server:
   enabled: false                # see Authentication

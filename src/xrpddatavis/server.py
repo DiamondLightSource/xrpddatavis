@@ -323,7 +323,7 @@ async def lifespan(app: FastAPI):
     )
 
     cleanup = asyncio.create_task(
-        _cleanup_loop(app.state.store, config.cleanup.interval_seconds)
+        _cleanup_loop(app.state.store, config.plots.cleanup_interval_seconds)
     )
 
     yield

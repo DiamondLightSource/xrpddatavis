@@ -39,6 +39,8 @@ class PlotsConfig(BaseModel):
     # ":memory:" to keep them in memory only.
     db_path: str = "plots.db"
 
+    cleanup_interval_seconds: int = Field(default=300, ge=1)
+
 
 class AuthServerConfig(BaseModel):
     """How the server checks who is calling it.
@@ -74,16 +76,10 @@ class AuthServerConfig(BaseModel):
         return self.issuer.rstrip("/") + "/.well-known/openid-configuration"
 
 
-class CleanupConfig(BaseModel):
-    # how frequently the cleanup job actually runs
-    interval_seconds: int = Field(default=300, ge=1)
-
-
 class Config(BaseSettings):
     server: ServerConfig = Field(default_factory=ServerConfig)
     beamline: BeamlineConfig = Field(default_factory=BeamlineConfig)
     plots: PlotsConfig = Field(default_factory=PlotsConfig)
-    cleanup: CleanupConfig = Field(default_factory=CleanupConfig)
     auth_server: AuthServerConfig = Field(default_factory=AuthServerConfig)
 
     model_config = SettingsConfigDict(

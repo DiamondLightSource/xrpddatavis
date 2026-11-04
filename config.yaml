@@ -10,9 +10,7 @@ plots:
   max_plots: 20 # maximum number of plots held/displayable at once
   ttl_seconds: 3600 # time to live of a plot before it is cleared
   max_points: 1000000 # largest single trace accepted by POST /plot
-
-cleanup:
-  interval_seconds: 300 #frequency of checking for deletable results
+  cleanup_interval_seconds: 300 #frequency of checking for deletable results
 
 auth_server:
   # off for local runs, as there's no oauth2-proxy to log you in. Set true to

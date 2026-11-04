@@ -86,9 +86,8 @@ config:
     # sqlite file the plots are kept in. Must live under persistence.mountPath
     # for plots to survive a pod restart.
     db_path: /data/plots.db
-  cleanup:
     # how often expired plots are swept up
-    interval_seconds: 300
+    cleanup_interval_seconds: 300
   logging:
     graylog:
       enabled: false

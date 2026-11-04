@@ -24,8 +24,12 @@ def config() -> Config:
     return Config.model_validate(
         {
             "beamline": {"name": "i11"},
-            "plots": {"max_plots": 3, "ttl_seconds": 60, "max_points": 100},
-            "cleanup": {"interval_seconds": 3600},
+            "plots": {
+                "max_plots": 3,
+                "ttl_seconds": 60,
+                "max_points": 100,
+                "cleanup_interval_seconds": 3600,
+            },
         }
     )
 

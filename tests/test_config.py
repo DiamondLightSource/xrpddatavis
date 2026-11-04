@@ -11,8 +11,7 @@ beamline:
 plots:
   max_plots: 7
   db_path: /data/plots.db
-cleanup:
-  interval_seconds: 10
+  cleanup_interval_seconds: 10
 """
 
 
@@ -32,7 +31,7 @@ def assert_loaded_from_yaml(config: Config) -> None:
     assert config.beamline.name == "i15-1"
     assert config.plots.max_plots == 7
     assert config.plots.db_path == "/data/plots.db"
-    assert config.cleanup.interval_seconds == 10
+    assert config.plots.cleanup_interval_seconds == 10
     # fields the file leaves out keep their defaults
     assert config.plots.ttl_seconds == 3600
     assert config.server.port == 8000
@@ -44,7 +43,7 @@ def test_defaults():
     assert config.server.host == "0.0.0.0"
     assert config.plots.max_plots == 20
     assert config.plots.db_path == "plots.db"
-    assert config.cleanup.interval_seconds == 300
+    assert config.plots.cleanup_interval_seconds == 300
 
 
 @pytest.mark.parametrize("as_str", [True, False])
@@ -88,7 +87,7 @@ def test_unknown_keys_are_ignored(tmp_path):
         "plots:\n  max_plots: 0",
         "plots:\n  ttl_seconds: 0",
         "plots:\n  max_points: 0",
-        "cleanup:\n  interval_seconds: 0",
+        "plots:\n  cleanup_interval_seconds: 0",
         "plots:\n  max_plots: lots",
     ],
 )
