@@ -130,8 +130,9 @@ oauth2-proxy:
   ingress:
     enabled: false
   config:
-    # the SealedSecret in templates/keycloak_secret.yaml - holds client-id,
-    # client-secret and cookie-secret
+    # the secret holding client-id, client-secret and cookie-secret - a
+    # SealedSecret in the beamline's services repo (e.g. i15-services), not
+    # this chart
     existingSecret: xrpddatavis-keycloak-secret
     # made by templates/oauth2-proxy-config.yaml
     existingConfig: xrpddatavis-oauth2-proxy-config

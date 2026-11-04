@@ -82,10 +82,17 @@ Use `echo -n` so no trailing newline gets encrypted with the value. If
 `kubeseal` can't find the controller, check which namespace your cluster runs
 it in and pass `--controller-namespace` / `--controller-name`.
 
-Paste each output (a long string starting `Ag...`) into
-`templates/keycloak_secret.yaml`:
+Paste each output (a long string starting `Ag...`) into a SealedSecret in
+the beamline's services repo (e.g. `i15-services`), not this chart, which
+every beamline shares:
 
 ```yaml
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: xrpddatavis-keycloak-secret
+  namespace: <your namespace>
+spec:
   encryptedData:
     client-id: AgB...
     client-secret: AgC...
