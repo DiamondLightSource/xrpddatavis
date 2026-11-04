@@ -1,5 +1,5 @@
-{{- if .Values.auth.enabled }}
-{{- $issuer := .Values.auth.issuer }}
+{{- if .Values.config.auth.enabled }}
+{{- $issuer := .Values.config.auth.issuer }}
 # oauth2-proxy's settings, split the way Atlas splits them: the "alpha" config
 # (providers, upstreams, headers) and the flat config file (everything else).
 # oauth2-proxy only reads these at start-up - restart its pod after changing
@@ -40,7 +40,7 @@ stringData:
         # oauth2-proxy chart sets
         clientID: ${OAUTH2_PROXY_CLIENT_ID}
         clientSecret: ${OAUTH2_PROXY_CLIENT_SECRET}
-        scope: {{ .Values.auth.scope | quote }}
+        scope: {{ .Values.config.auth.scope | quote }}
         oidcConfig:
           issuerURL: {{ $issuer | quote }}
           insecureAllowUnverifiedEmail: true
@@ -67,7 +67,7 @@ data:
     email_domains = ["*"]
     cookie_secure = true
     cookie_samesite = "lax"
-    cookie_expire = {{ .Values.auth.cookieExpire | quote }}
+    cookie_expire = {{ .Values.config.auth.cookieExpire | quote }}
     cookie_refresh = "45s"
     cookie_name = "{{ include "xrpddatavis.oauth2ProxyName" . }}-cookie"
     # trust X-Forwarded-* from the ingress, so redirects back after login use
@@ -83,7 +83,7 @@ data:
     api_routes = ["^/(liveplots|plot|plots|edit|remove|events|limits|info|user)(/|$)"]
     # lets logout continue on to Keycloak's own sign-out page
     whitelist_domains = [{{ regexReplaceAll "^https?://([^/]+).*$" $issuer "${1}" | quote }}]
-{{- with .Values.auth.extraConfig }}
+{{- with .Values.config.auth.extraConfig }}
 {{ . | indent 4 }}
 {{- end }}
 {{- end }}

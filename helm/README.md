@@ -1,6 +1,6 @@
 # Deploying xrpddatavis with login
 
-With `auth.enabled: true` (the default), the chart puts the app behind
+With `config.auth.enabled: true` (the default), the chart puts the app behind
 Keycloak login the same way Diamond's other web apps do (Atlas's `ui-base`
 chart and BlueAPI):
 
@@ -36,7 +36,7 @@ Keycloak needs it in step 2.
 
 ### 2. Request a Keycloak client
 
-Ask for a client in the realm you will log in against (`auth.issuer`,
+Ask for a client in the realm you will log in against (`config.auth.issuer`,
 `https://identity.diamond.ac.uk/realms/dls` by default):
 
 | Setting | Value |
@@ -113,11 +113,12 @@ ingress:
         - path: /
           pathType: Prefix
 
-auth:
-  enabled: true
-  issuer: https://identity.diamond.ac.uk/realms/dls
-  # once Keycloak has added the audience mapper from step 2:
-  # client_audience: <client id>
+config:
+  auth:
+    enabled: true
+    issuer: https://identity.diamond.ac.uk/realms/dls
+    # once Keycloak has added the audience mapper from step 2:
+    # client_audience: <client id>
 ```
 
 ### 6. Deploy and check
@@ -138,11 +139,11 @@ back to the app with your name shown in the top right.
 | oauth2-proxy pod stuck in `CreateContainerConfigError` | the keycloak secret doesn't exist yet: `encryptedData` is still blank, or was sealed for a different namespace or name (`kubectl describe sealedsecret -n $NS`) |
 | Keycloak says "Invalid redirect uri" | the client's redirect URI isn't exactly `https://<host>/oauth2/callback` |
 | `502` straight after login | nginx header buffer too small; keep the `proxy-buffer-size` ingress annotation |
-| Logged in, but every API call returns `401 Invalid access token: Audience doesn't match` | `auth.client_audience` doesn't match the token's `aud` claim |
+| Logged in, but every API call returns `401 Invalid access token: Audience doesn't match` | `config.auth.client_audience` doesn't match the token's `aud` claim |
 | Changes to `auth` values have no effect | oauth2-proxy reads its config only at start-up: `kubectl rollout restart deployment <release>-oauth2-proxy -n $NS` |
 
 ## Turning login off
 
-`auth.enabled: false` removes oauth2-proxy and the SealedSecret, points the
+`config.auth.enabled: false` removes oauth2-proxy and the SealedSecret, points the
 ingress straight at the app, and turns off the app's token check. Anyone who
 can reach the address can then read and change the plots.

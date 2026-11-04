@@ -37,7 +37,7 @@ spec:
               service:
                 {{- /* with auth on, all traffic goes through oauth2-proxy,
                 which forwards it to the app once the user is logged in */}}
-                {{- if $.Values.auth.enabled }}
+                {{- if $.Values.config.auth.enabled }}
                 name: {{ include "xrpddatavis.oauth2ProxyName" $ }}
                 port:
                   number: {{ index $.Values "oauth2-proxy" "service" "portNumber" }}
