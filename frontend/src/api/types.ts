@@ -154,4 +154,13 @@ export interface Limits {
 
 export interface AppInfo {
   beamline: string;
+  /** where the logout button goes - "" when the server has auth turned off */
+  logout_url: string;
+}
+
+/** The logged-in user, from their access token (mirrors auth/oidc.py User). */
+export interface User {
+  fedid: string;
+  name: string | null;
+  email: string | null;
 }

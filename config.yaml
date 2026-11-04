@@ -13,3 +13,10 @@ plots:
 
 cleanup:
   interval_seconds: 300 #frequency of checking for deletable results
+
+auth:
+  # off for local runs, as there's no oauth2-proxy to log you in. Set true to
+  # test tokens from the real Keycloak - see README.md, "Authentication"
+  enabled: false
+  issuer: "https://identity.diamond.ac.uk/realms/dls"
+  client_audience: "account"

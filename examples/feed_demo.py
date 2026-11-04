@@ -1,38 +1,29 @@
 #!/usr/bin/env python
-"""Post synthetic total-scattering data at a running xrpddatavis server.
+"""Post made-up total-scattering data to a running xrpddatavis server.
 
 Each "scan" mimics one PDFgetX3 job: a raw intensity curve I(Q), a powder
-pattern, and the derived S(Q) / F(Q) / G(r) curves it produces, all sharing
-one file number. That gives the frontend several ``data_type`` tabs and
-several file-number chips to filter by straight away.
+pattern, and the S(Q) / F(Q) / G(r) curves derived from it, all sharing one
+file number. That fills the frontend's data-type tabs and file-number chips.
 
-Examples
---------
-Fill the server with three scans (15 plots: 5 types x 3 file numbers)::
-
-    python examples/feed_demo.py --count 3
-
-Post only the PDF and structure-factor products, five scans of them::
-
-    python examples/feed_demo.py --count 5 --types gr sq fq
-
-Watch a single pxrd trace update live for a minute, as a scan would::
-
-    python examples/feed_demo.py --live --interval 2 --count 30
+Run it with the server up: ``python examples/feed_demo.py``
 """
 
-import argparse
 import time
+from typing import Any
 
 import numpy as np
+import numpy.typing as npt
 import requests
 
-# order mirrors a PDFgetX3 job: a raw curve, the classic powder pattern, then
-# the three total-scattering products derived from it
-DEMO_TYPES = ["pxrd", "iq", "sq", "fq", "gr"]
+from xrpddatavis.models import DataPlot, FittedDataPlot, XYEData
 
-# axis labels and on-disk extensions PDFgetX3 conventionally uses per product
-AXES = {
+Array = npt.NDArray[np.float64]
+
+# in the order a PDFgetX3 job produces them
+DATA_TYPES = ["pxrd", "iq", "sq", "fq", "gr"]
+
+# per data type: x label, y label, file extension
+LABELS = {
     "pxrd": ("2θ / °", "Intensity / counts", "xye"),
     "iq": ("Q / Å⁻¹", "I(Q) / counts", "iq"),
     "sq": ("Q / Å⁻¹", "S(Q)", "sq"),
@@ -40,8 +31,8 @@ AXES = {
     "gr": ("r / Å", "G(r)", "gr"),
 }
 
+# Bragg peaks for the powder pattern: (2θ centre, relative height, width)
 PXRD_PEAKS = [
-    # (2-theta centre, relative intensity, width)
     (18.2, 0.45, 0.10),
     (22.6, 1.00, 0.09),
     (28.4, 0.62, 0.11),
@@ -52,245 +43,183 @@ PXRD_PEAKS = [
     (54.7, 0.30, 0.15),
 ]
 
-# characteristic pair distances and relative weights for the toy G(r) - e.g.
-# nearest-, second- and third-neighbour shells of a simple ionic structure
+# neighbour shells for G(r): (distance, relative height)
 GR_SHELLS = [(2.3, 1.0), (3.4, 0.65), (4.6, 0.45), (5.9, 0.30), (7.0, 0.22)]
 
 
-def pxrd_pattern(rng, points=1500, scale=1.0, shift=0.0):
-    """A background plus pseudo-Voigt Bragg peaks with Poisson counting noise.
-
-    Returns ``x, y, e, background, calc`` - the noise-free ``background`` and
-    ``background + signal`` curves are what a real Rietveld fit would
-    produce alongside the observed counts, so callers that want a
-    :class:`FittedDataPlot` example can use them directly instead of only
-    the ``(x, y, e)`` most callers need.
-    """
+def make_pxrd(
+    title: str, rng: np.random.Generator, points: int, scale: float, shift: float
+) -> FittedDataPlot:
+    """A falling background plus Bragg peaks, with counting noise - and the fit
+    a Rietveld refinement would give alongside it."""
     x = np.linspace(10.0, 60.0, points)
     background = 120.0 + 900.0 * np.exp(-(x - 10.0) / 12.0)
-    signal = np.zeros_like(x)
+
+    peaks = np.zeros_like(x)
     for centre, height, width in PXRD_PEAKS:
-        gauss = np.exp(-0.5 * ((x - centre - shift) / width) ** 2)
-        lorentz = 1.0 / (1.0 + ((x - centre - shift) / width) ** 2)
-        signal += height * 9000.0 * scale * (0.7 * gauss + 0.3 * lorentz)
-    calc = background + signal
-    noisy = rng.poisson(calc).astype(float)
-    return x, noisy, np.sqrt(np.maximum(noisy, 1.0)), background, calc
+        offset = (x - centre - shift) / width
+        gaussian = np.exp(-0.5 * offset**2)
+        lorentzian = 1.0 / (1.0 + offset**2)
+        peaks += height * 9000.0 * scale * (0.7 * gaussian + 0.3 * lorentzian)
+
+    calc = background + peaks
+    y = rng.poisson(calc).astype(float)
+    return FittedDataPlot(
+        title=title,
+        x=x.tolist(),
+        y=y.tolist(),
+        e=np.sqrt(np.maximum(y, 1.0)).tolist(),
+        calc=calc.tolist(),
+        diff=(y - calc).tolist(),
+        background=background.tolist(),
+        markers=[centre + shift for centre, _, _ in PXRD_PEAKS],
+    )
 
 
-def iq_pattern(rng, points=1500, scale=1.0, shift=0.0):
-    """Raw measured intensity vs Q: a falling background plus form-factor ripple."""
+def make_iq(
+    title: str, rng: np.random.Generator, points: int, scale: float, shift: float
+) -> XYEData:
+    """Raw intensity against Q: a falling background plus a ripple."""
     q = np.linspace(0.5, 25.0, points)
     clean = 9000.0 * np.exp(-q / 4.0) + 150.0
     clean += 400.0 * scale * np.exp(-q / 9.0) * (1 + np.sin(2.6 * q - shift))
-    noisy = rng.poisson(np.maximum(clean, 1.0)).astype(float)
-    return q, noisy, np.sqrt(np.maximum(noisy, 1.0))
+    y = rng.poisson(np.maximum(clean, 1.0)).astype(float)
+    return XYEData(
+        title=title,
+        x=q.tolist(),
+        y=y.tolist(),
+        e=np.sqrt(np.maximum(y, 1.0)).tolist(),
+    )
 
 
-def sq_pattern(rng, points=1500, scale=1.0, shift=0.0):
-    """The total-scattering structure factor: oscillates about 1, damped at high Q."""
+def clean_sq(q: Array, scale: float, shift: float) -> Array:
+    """S(Q) without noise: oscillates about 1, dying away at high Q."""
+    return 1.0 + scale * 0.85 * np.exp(-q / 11.0) * np.sin(2.7 * q - shift)
+
+
+def make_sq(
+    title: str, rng: np.random.Generator, points: int, scale: float, shift: float
+) -> XYEData:
+    """The structure factor S(Q)."""
     q = np.linspace(0.5, 25.0, points)
-    clean = 1.0 + scale * 0.85 * np.exp(-q / 11.0) * np.sin(2.7 * q - shift)
-    noisy = clean + rng.normal(0.0, 0.01, size=q.shape)
-    return q, noisy, np.full_like(q, 0.01)
+    y = clean_sq(q, scale, shift) + rng.normal(0.0, 0.01, size=q.shape)
+    return XYEData(title=title, x=q.tolist(), y=y.tolist(), e=[0.01] * points)
 
 
-def fq_pattern(rng, points=1500, scale=1.0, shift=0.0):
+def make_fq(
+    title: str, rng: np.random.Generator, points: int, scale: float, shift: float
+) -> XYEData:
     """The reduced structure function F(Q) = Q * (S(Q) - 1)."""
-    q, s, _ = sq_pattern(rng, points=points, scale=scale, shift=shift)
-    clean = q * (s - 1.0)
-    noisy = clean + rng.normal(0.0, 0.02, size=q.shape)
-    return q, noisy, np.full_like(q, 0.02)
+    q = np.linspace(0.5, 25.0, points)
+    y = q * (clean_sq(q, scale, shift) - 1.0) + rng.normal(0.0, 0.02, size=q.shape)
+    return XYEData(title=title, x=q.tolist(), y=y.tolist(), e=[0.02] * points)
 
 
-def gr_pattern(rng, points=1500, scale=1.0, shift=0.0):
-    """The pair distribution function: sharp peaks at bond distances plus
-    small Fourier-termination ripples either side."""
+def make_gr(
+    title: str, rng: np.random.Generator, points: int, scale: float, shift: float
+) -> XYEData:
+    """The pair distribution function G(r): a sharp peak at each neighbour
+    distance, with a small dip just after it."""
     r = np.linspace(0.0, 20.0, points)
     clean = np.zeros_like(r)
-    for centre, height in GR_SHELLS:
-        clean += height * scale * np.exp(-0.5 * ((r - centre - shift) / 0.08) ** 2)
-        clean -= (
-            0.12 * height * scale * np.exp(-0.5 * ((r - centre - 0.35) / 0.15) ** 2)
-        )
-    noisy = clean + rng.normal(0.0, 0.015, size=r.shape)
-    return r, noisy, np.full_like(r, 0.015)
+    for distance, height in GR_SHELLS:
+        peak = np.exp(-0.5 * ((r - distance - shift) / 0.08) ** 2)
+        dip = np.exp(-0.5 * ((r - distance - 0.35) / 0.15) ** 2)
+        clean += height * scale * (peak - 0.12 * dip)
+    y = clean + rng.normal(0.0, 0.015, size=r.shape)
+    return XYEData(title=title, x=r.tolist(), y=y.tolist(), e=[0.015] * points)
 
 
-GENERATORS = {
-    # pxrd_pattern returns two extra arrays (background, calc) that the
-    # other generators don't have - drop them here so every entry in this
-    # dict has the same (x, y, e) contract; pxrd_pattern is called directly
-    # instead, in main(), whenever the extra Rietveld-style fit is wanted.
-    "pxrd": lambda *args, **kwargs: pxrd_pattern(*args, **kwargs)[:3],
-    "iq": iq_pattern,
-    "sq": sq_pattern,
-    "fq": fq_pattern,
-    "gr": gr_pattern,
-}
+def make_data(
+    data_type: str,
+    title: str,
+    rng: np.random.Generator,
+    points: int,
+    scale: float,
+    shift: float,
+) -> XYEData:
+    """The curve for `data_type` - for pxrd, a FittedDataPlot carrying its fit."""
+    if data_type == "pxrd":
+        return make_pxrd(title, rng, points, scale, shift)
+    if data_type == "iq":
+        return make_iq(title, rng, points, scale, shift)
+    if data_type == "sq":
+        return make_sq(title, rng, points, scale, shift)
+    if data_type == "fq":
+        return make_fq(title, rng, points, scale, shift)
+    if data_type == "gr":
+        return make_gr(title, rng, points, scale, shift)
+    raise ValueError(f"unknown data type {data_type!r}")
 
 
-def payload(
-    title,
-    x,
-    y,
-    e,
-    filenumber,
-    x_label,
-    y_label,
-    data_type,
-    instrument_session,
-    fit=None,
-) -> dict:
-    """Build a flat POST /plot body - a DataPlot, or a FittedDataPlot if
-    ``fit`` is given as a ``{"calc": ..., "diff": ..., "background": ...,
-    "markers": ...}`` dict (any of which may be omitted except ``calc``)."""
-    ext = AXES[data_type][2]
-    body = {
-        "title": title,
-        "x": x.tolist(),
-        "y": y.tolist(),
-        "e": e.tolist(),
-        # a real Diamond-style path - the server pulls the instrument
-        # session out of this (see DataPlot.get_instrument_session)
-        "filepath": f"/dls/i11/data/2026/{instrument_session}/{title}.{ext}",
+def plot_fields(
+    title: str, data_type: str, filenumber: int, instrument_session: str
+) -> dict[str, Any]:
+    """The DataPlot fields that say what a curve is and where it came from."""
+    x_label, y_label, extension = LABELS[data_type]
+    return {
+        # a Diamond-style path - the server reads the instrument session from it
+        "filepath": f"/dls/i11/data/2026/{instrument_session}/{title}.{extension}",
         "filenumber": filenumber,
         "x_label": x_label,
         "y_label": y_label,
         "data_type": data_type,
-        "plot_type": "line",
     }
-    if fit is not None:
-        body["calc"] = fit["calc"].tolist()
-        if "diff" in fit:
-            body["diff"] = fit["diff"].tolist()
-        if "background" in fit:
-            background = fit["background"]
-            body["background"] = (
-                background.tolist() if hasattr(background, "tolist") else background
-            )
-        if "markers" in fit:
-            body["markers"] = list(fit["markers"])
-    return body
 
 
-def post(endpoint: str, body: dict, label: str) -> None:
-    response = requests.post(endpoint, json=body, timeout=30)
+def post_plot(url: str, plot: DataPlot) -> None:
+    body = plot.model_dump(mode="json", exclude_none=True)
+    response = requests.post(f"{url}/plot", json=body, timeout=30)
     response.raise_for_status()
     result = response.json()
-    evicted = f" (evicted {len(result['evicted'])})" if result["evicted"] else ""
-    print(f"posted {label} -> {result['id']}{evicted}")
+
+    message = f"posted {plot.title} [{plot.data_type}] -> {result['id']}"
+    if result["evicted"]:
+        message += f" (evicted {len(result['evicted'])})"
+    print(message)
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    parser.add_argument(
-        "--url", default="http://localhost:8000", help="server base URL"
-    )
-    parser.add_argument(
-        "--count",
-        type=int,
-        default=3,
-        help="scans to post (--live: number of live updates instead)",
-    )
-    parser.add_argument("--points", type=int, default=1500, help="points per curve")
-    parser.add_argument(
-        "--types",
-        nargs="+",
-        choices=DEMO_TYPES,
-        default=None,
-        help=f"data types to post per scan (default: all of {', '.join(DEMO_TYPES)})",
-    )
-    parser.add_argument(
-        "--start-filenumber", type=int, default=1, help="file number of the first scan"
-    )
-    parser.add_argument(
-        "--instrument-session",
-        default="cm12345-1",
-        help="instrument session to embed in each plot's filepath, e.g. cm12345-1 "
-        "(run twice with different sessions to see the picker in the title bar)",
-    )
-    parser.add_argument(
-        "--live",
-        action="store_true",
-        help="repeatedly upsert one trace (of --types' first type) instead of "
-        "posting a batch of new scans",
-    )
-    parser.add_argument(
-        "--interval", type=float, default=0.0, help="seconds to wait between posts"
-    )
-    args = parser.parse_args()
-
+def post_scans(
+    url: str,
+    count: int,
+    data_types: list[str],
+    points: int,
+    start_filenumber: int,
+    instrument_session: str,
+    interval: float,
+) -> None:
+    """Post `count` scans, each with one plot per data type."""
     rng = np.random.default_rng(1234)
-    endpoint = f"{args.url.rstrip('/')}/plot"
-    types = args.types or DEMO_TYPES
 
-    if args.live:
-        data_type = types[0]
-        x_label, y_label, _ = AXES[data_type]
-        for index in range(args.count):
-            x, y, e = GENERATORS[data_type](
-                rng, points=args.points, scale=1.0 - 0.02 * index, shift=0.0
-            )
-            body = payload(
-                "live-scan",
-                x,
-                y,
-                e,
-                filenumber=args.start_filenumber,
-                x_label=x_label,
-                y_label=y_label,
-                data_type=data_type,
-                instrument_session=args.instrument_session,
-            )
-            body["upsert"] = True
-            post(endpoint, body, f"live-scan update {index + 1} [{data_type}]")
-            if args.interval and index < args.count - 1:
-                time.sleep(args.interval)
-        return
+    for scan in range(count):
+        filenumber = start_filenumber + scan
+        scale = 1.0 - 0.05 * scan
+        shift = 0.02 * scan
 
-    for scan in range(args.count):
-        filenumber = args.start_filenumber + scan
-        for data_type in types:
-            x_label, y_label, _ = AXES[data_type]
-            shift = 0.02 * scan
-            fit = None
-            if data_type == "pxrd" and scan == 0:
-                # the first pxrd scan is posted as a FittedDataPlot: a toy
-                # Rietveld-style fit with calc, diff, background and the
-                # Bragg peak positions as reflection markers
-                x, y, e, background, calc = pxrd_pattern(
-                    rng, points=args.points, scale=1.0 - 0.05 * scan, shift=shift
-                )
-                fit = {
-                    "calc": calc,
-                    "diff": y - calc,
-                    "background": background,
-                    "markers": [centre + shift for centre, _, _ in PXRD_PEAKS],
-                }
+        for data_type in data_types:
+            title = f"{data_type}-{filenumber:03d}"
+            data = make_data(data_type, title, rng, points, scale, shift)
+            fields = plot_fields(title, data_type, filenumber, instrument_session)
+
+            # only the first pxrd scan is sent with its fit, to show a
+            # FittedDataPlot - the rest are plain DataPlots
+            if isinstance(data, FittedDataPlot) and scan == 0:
+                plot = data.model_copy(update=fields)
             else:
-                x, y, e = GENERATORS[data_type](
-                    rng, points=args.points, scale=1.0 - 0.05 * scan, shift=shift
-                )
-            name = f"{data_type}-{filenumber:03d}"
-            body = payload(
-                name,
-                x,
-                y,
-                e,
-                filenumber,
-                x_label,
-                y_label,
-                data_type,
-                args.instrument_session,
-                fit=fit,
-            )
-            post(endpoint, body, f"{name} [{data_type}] file #{filenumber}")
-        if args.interval and scan < args.count - 1:
-            time.sleep(args.interval)
+                plot = DataPlot(title=title, x=data.x, y=data.y, e=data.e, **fields)
+            post_plot(url, plot)
+
+        if interval and scan < count - 1:
+            time.sleep(interval)
 
 
 if __name__ == "__main__":
-    main()
+    post_scans(
+        url="http://localhost:8000",
+        count=3,
+        data_types=DATA_TYPES,
+        points=1500,
+        start_filenumber=1,
+        instrument_session="cm12345-1",
+        interval=0.0,
+    )

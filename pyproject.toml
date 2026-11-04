@@ -18,6 +18,7 @@ dependencies = [
     "scipy",
     "pydantic",
     "pydantic-settings",
+    "pyjwt[crypto]",
     "requests",
     "stomp.py",
     "fastapi",

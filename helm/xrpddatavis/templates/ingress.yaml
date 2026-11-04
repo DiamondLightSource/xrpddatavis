@@ -35,9 +35,17 @@ spec:
             {{- end }}
             backend:
               service:
+                {{- /* with auth on, all traffic goes through oauth2-proxy,
+                which forwards it to the app once the user is logged in */}}
+                {{- if $.Values.auth.enabled }}
+                name: {{ include "xrpddatavis.oauth2ProxyName" $ }}
+                port:
+                  number: {{ index $.Values "oauth2-proxy" "service" "portNumber" }}
+                {{- else }}
                 name: {{ include "xrpddatavis.fullname" $ }}
                 port:
                   number: {{ $.Values.service.port }}
+                {{- end }}
           {{- end }}
     {{- end }}
 {{- end }}

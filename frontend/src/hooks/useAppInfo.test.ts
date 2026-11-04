@@ -5,7 +5,7 @@ import { useAppInfo } from "./useAppInfo";
 
 describe("useAppInfo", () => {
   it("loads the beamline", async () => {
-    vi.spyOn(api, "info").mockResolvedValue({ beamline: "i11" });
+    vi.spyOn(api, "info").mockResolvedValue({ beamline: "i11", logout_url: "" });
     const { result } = renderHook(() => useAppInfo());
     await waitFor(() => expect(result.current.beamline).toBe("i11"));
   });
@@ -18,12 +18,20 @@ describe("useAppInfo", () => {
   });
 
   it("ignores a response that arrives after unmount", async () => {
-    let resolve!: (value: { beamline: string }) => void;
+    let resolve!: (value: { beamline: string; logout_url: string }) => void;
     vi.spyOn(api, "info").mockReturnValue(new Promise((r) => (resolve = r)));
     const { result, unmount } = renderHook(() => useAppInfo());
     unmount();
-    resolve({ beamline: "i11" });
+    resolve({ beamline: "i11", logout_url: "" });
     await Promise.resolve();
     expect(result.current.beamline).toBe("");
+  });
+});
+
+describe("useAppInfo logout", () => {
+  it("loads the logout URL", async () => {
+    vi.spyOn(api, "info").mockResolvedValue({ beamline: "i11", logout_url: "/oauth2/sign_out" });
+    const { result } = renderHook(() => useAppInfo());
+    await waitFor(() => expect(result.current.logoutUrl).toBe("/oauth2/sign_out"));
   });
 });
